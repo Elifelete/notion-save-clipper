@@ -131,15 +131,16 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
 
       if (selectedDestination.type === 'database') {
         try {
-          const schema = await getDatabaseSchema(apiKey, selectedDestination.id);
-          setDatabaseProperties(schema);
+          const destSchema = await getDatabaseSchema(apiKey, selectedDestination.id);
+          const properties = destSchema.properties || selectedDestination.properties || {};
+          setDatabaseProperties(properties);
 
           // Inicializa mapeamentos inteligentes
           const initialMappings: PropertyFieldMapping[] = [];
 
-          for (const [propName, prop] of Object.entries(schema) as [string, any][]) {
-            const pType = prop.type;
-            const pId = prop.id;
+          for (const [propName, prop] of Object.entries(properties) as [string, any][]) {
+            const pType = prop?.type;
+            const pId = prop?.id || propName;
             const lowerName = propName.toLowerCase();
 
             if (pType === 'title') {
@@ -155,19 +156,20 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               initialMappings.push({
                 notionPropertyId: pId,
                 notionPropertyName: propName,
-                notionPropertyType: pType,
+                notionPropertyType: pType || 'url',
                 source: 'page_url',
                 showInPopup: true,
               });
             } else if (
               lowerName === 'description' ||
               lowerName === 'descrição' ||
+              lowerName === 'descricao' ||
               lowerName === 'resumo'
             ) {
               initialMappings.push({
                 notionPropertyId: pId,
                 notionPropertyName: propName,
-                notionPropertyType: pType,
+                notionPropertyType: pType || 'rich_text',
                 source: 'page_description',
                 showInPopup: true,
               });
@@ -226,23 +228,26 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
 
   // Adiciona um campo vindo do schema da Database
   const handleAddFieldFromDatabase = (propName: string, prop: any) => {
-    if (mappings.some((m) => m.notionPropertyId === prop.id)) return;
+    const propId = prop?.id || propName;
+    if (mappings.some((m) => m.notionPropertyId === propId)) return;
 
     let defaultSource: PropertyDataSource = 'manual';
     const lowerName = propName.toLowerCase();
-    if (prop.type === 'title') defaultSource = 'page_title';
-    else if (prop.type === 'url' || lowerName.includes('url') || lowerName.includes('link')) defaultSource = 'page_url';
+    const pType = prop?.type || 'rich_text';
+
+    if (pType === 'title') defaultSource = 'page_title';
+    else if (pType === 'url' || lowerName.includes('url') || lowerName.includes('link')) defaultSource = 'page_url';
     else if (lowerName.includes('desc') || lowerName.includes('resumo')) defaultSource = 'page_description';
-    else if (prop.type === 'date' || lowerName.includes('data')) defaultSource = 'page_date';
+    else if (pType === 'date' || lowerName.includes('data')) defaultSource = 'page_date';
     else if (lowerName.includes('author') || lowerName.includes('autor')) defaultSource = 'page_author';
 
     const newMapping: PropertyFieldMapping = {
-      notionPropertyId: prop.id,
+      notionPropertyId: propId,
       notionPropertyName: propName,
-      notionPropertyType: prop.type,
+      notionPropertyType: pType,
       source: defaultSource,
       showInPopup: true,
-      required: prop.type === 'title',
+      required: pType === 'title',
     };
 
     setMappings((prev) => [...prev, newMapping]);
@@ -419,8 +424,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
 
         {/* Lista de Resultados */}
         <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-          {filteredDestinations.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-xs">
+          {filteredDestinations.length === 0 ? (            <div className="text-center py-8 text-gray-400 text-xs">
               Nenhuma base ou página encontrada para "{searchQuery}".
             </div>
           ) : (
@@ -653,8 +657,8 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               <button
                 type="button"
                 onClick={() => setDetectExisting(!detectExisting)}
-                className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
-                  detectExisting ? 'bg-blue-600' : 'bg-gray-200'
+                className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
+                  detectExisting ? 'bg-blue-600' : 'bg-gray-300'
                 }`}
               >
                 <div
@@ -739,12 +743,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                           type="button"
                           onClick={() =>
                             setActiveSourceMenuId(
-                              activeSourceMenuId === mapping.notionPropertyId
-                                ? null
-                                : mapping.notionPropertyId
+                              activeSourceMenuId === mapping.notionPropertyId ? null : mapping.notionPropertyId
                             )
                           }
-                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 hover:bg-gray-200/80 text-gray-700 text-xs font-medium transition-colors cursor-pointer"
                         >
                           {renderSourceIcon(mapping.source)}
                           <span>{getSourceLabel(mapping.source)}</span>
@@ -847,37 +849,46 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                       </div>
 
                       <div className="space-y-0.5">
-                        {Object.entries(databaseProperties)
-                          .filter(([name]) =>
-                            name.toLowerCase().includes(propertySearchQuery.toLowerCase())
-                          )
-                          .map(([propName, prop]: any) => {
-                            const isAlreadyAdded = mappings.some(
-                              (m) => m.notionPropertyId === prop.id
-                            );
+                        {Object.entries(databaseProperties).length === 0 ? (
+                          <div className="py-2.5 text-center text-gray-400 text-xs">
+                            {selectedDestination?.type === 'page'
+                              ? 'Páginas comuns não possuem propriedades adicionais.'
+                              : 'Nenhuma propriedade adicional encontrada nesta base.'}
+                          </div>
+                        ) : (
+                          Object.entries(databaseProperties)
+                            .filter(([name]) =>
+                              name.toLowerCase().includes(propertySearchQuery.toLowerCase())
+                            )
+                            .map(([propName, prop]: any) => {
+                              const propId = prop?.id || propName;
+                              const isAlreadyAdded = mappings.some(
+                                (m) => m.notionPropertyId === propId
+                              );
 
-                            return (
-                              <button
-                                key={prop.id}
-                                type="button"
-                                disabled={isAlreadyAdded}
-                                onClick={() => handleAddFieldFromDatabase(propName, prop)}
-                                className={`w-full flex items-center justify-between p-1.5 rounded-md text-xs text-left cursor-pointer transition-colors ${
-                                  isAlreadyAdded
-                                    ? 'opacity-40 cursor-not-allowed bg-transparent'
-                                    : 'hover:bg-blue-50 text-gray-800'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 truncate">
-                                  {renderPropertyIcon(prop.type)}
-                                  <span className="font-medium truncate">{propName}</span>
-                                </div>
-                                <span className="text-[10px] text-gray-400">
-                                  {isAlreadyAdded ? 'Already Added' : `+ Adicionar`}
-                                </span>
-                              </button>
-                            );
-                          })}
+                              return (
+                                <button
+                                  key={propId}
+                                  type="button"
+                                  disabled={isAlreadyAdded}
+                                  onClick={() => handleAddFieldFromDatabase(propName, prop)}
+                                  className={`w-full flex items-center justify-between p-1.5 rounded-md text-xs text-left cursor-pointer transition-colors ${
+                                    isAlreadyAdded
+                                      ? 'opacity-40 cursor-not-allowed bg-transparent'
+                                      : 'hover:bg-blue-50 text-gray-800'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    {renderPropertyIcon(prop?.type || 'rich_text')}
+                                    <span className="font-medium truncate">{propName}</span>
+                                  </div>
+                                  <span className="text-[10px] text-gray-400">
+                                    {isAlreadyAdded ? 'Already Added' : `+ Adicionar`}
+                                  </span>
+                                </button>
+                              );
+                            })
+                        )}
                       </div>
                     </div>
                   </div>
