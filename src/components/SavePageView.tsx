@@ -58,32 +58,34 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     try {
       const propertiesPayload: Record<string, { type: string; value: any }> = {};
 
-      for (const mapping of form.mappings) {
-        if (!mapping.showInPopup && mapping.source !== 'page_title' && mapping.source !== 'page_url') {
-          continue;
-        }
+      if (form.destinationType === 'database' && form.mappings) {
+        for (const mapping of form.mappings) {
+          if (!mapping.showInPopup && mapping.source !== 'page_title' && mapping.source !== 'page_url') {
+            continue;
+          }
 
-        let val: any = null;
+          let val: any = null;
 
-        if (mapping.source === 'page_title' || mapping.notionPropertyType === 'title') {
-          val = title;
-        } else if (mapping.source === 'page_url' || mapping.notionPropertyType === 'url') {
-          val = url;
-        } else if (mapping.source === 'page_description') {
-          val = description;
-        } else if (propertyValues[mapping.notionPropertyId] !== undefined) {
-          val = propertyValues[mapping.notionPropertyId];
-        }
+          if (mapping.source === 'page_title' || mapping.notionPropertyType === 'title') {
+            val = title;
+          } else if (mapping.source === 'page_url' || mapping.notionPropertyType === 'url') {
+            val = url;
+          } else if (mapping.source === 'page_description') {
+            val = description;
+          } else if (propertyValues[mapping.notionPropertyId] !== undefined) {
+            val = propertyValues[mapping.notionPropertyId];
+          }
 
-        if (val !== null && val !== undefined && val !== '') {
-          propertiesPayload[mapping.notionPropertyName] = {
-            type: mapping.notionPropertyType,
-            value: val,
-          };
+          if (val !== null && val !== undefined && val !== '') {
+            propertiesPayload[mapping.notionPropertyName] = {
+              type: mapping.notionPropertyType,
+              value: val,
+            };
+          }
         }
       }
 
-      // Se for modo de extrair conteúdo do artigo, preparamos blocos básicos (resumo, link e texto)
+      // Preparação dos blocos de conteúdo
       const contentBlocks: any[] = [];
       if (form.clipContent) {
         if (description) {
@@ -113,7 +115,12 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
 
       const result = await createPage({
         apiKey,
-        databaseId: form.databaseId,
+        destinationType: form.destinationType || 'database',
+        destinationId: form.databaseId,
+        pageSaveMode: form.pageSaveMode || 'subpage',
+        title: title.trim(),
+        url: url.trim(),
+        description: description.trim(),
         properties: propertiesPayload,
         coverUrl: coverUrl,
         iconUrl: metadata.favicon,
@@ -127,6 +134,8 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
       setSaving(false);
     }
   };
+
+  const isSavingToPage = form.destinationType === 'page';
 
   return (
     <div className="p-3.5 space-y-3.5 text-xs text-gray-800">
@@ -203,38 +212,40 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
-            placeholder="Anotações ou resumo automático da página..."
+            placeholder="Anotações ou resumo da página..."
           />
         </div>
 
-        {/* Outras propriedades customizadas configuradas no Form */}
-        {form.mappings
-          .filter(
-            (m) =>
-              m.showInPopup &&
-              m.notionPropertyType !== 'title' &&
-              m.notionPropertyType !== 'url' &&
-              m.source !== 'page_description'
-          )
-          .map((m) => (
-            <div key={m.notionPropertyId}>
-              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                {m.notionPropertyName}
-              </label>
-              <input
-                type="text"
-                value={propertyValues[m.notionPropertyId] || ''}
-                onChange={(e) =>
-                  setPropertyValues({
-                    ...propertyValues,
-                    [m.notionPropertyId]: e.target.value,
-                  })
-                }
-                placeholder={`Preencher ${m.notionPropertyName}...`}
-                className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
-          ))}
+        {/* Outras propriedades customizadas configuradas no Form (quando for Database) */}
+        {!isSavingToPage &&
+          form.mappings &&
+          form.mappings
+            .filter(
+              (m) =>
+                m.showInPopup &&
+                m.notionPropertyType !== 'title' &&
+                m.notionPropertyType !== 'url' &&
+                m.source !== 'page_description'
+            )
+            .map((m) => (
+              <div key={m.notionPropertyId}>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  {m.notionPropertyName}
+                </label>
+                <input
+                  type="text"
+                  value={propertyValues[m.notionPropertyId] || ''}
+                  onChange={(e) =>
+                    setPropertyValues({
+                      ...propertyValues,
+                      [m.notionPropertyId]: e.target.value,
+                    })
+                  }
+                  placeholder={`Preencher ${m.notionPropertyName}...`}
+                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+            ))}
 
         {/* Mensagem de Erro */}
         {error && (
@@ -249,7 +260,11 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           <div className="p-3 bg-green-50 border border-green-200 text-green-800 text-xs rounded-md space-y-2">
             <div className="flex items-center gap-1.5 font-semibold">
               <CheckCircle2 className="w-4 h-4 text-green-600" />
-              <span>Salvo com sucesso no Notion!</span>
+              <span>
+                {isSavingToPage && form.pageSaveMode === 'append_block'
+                  ? 'Link inserido na página com sucesso!'
+                  : 'Salvo com sucesso no Notion!'}
+              </span>
             </div>
             <a
               href={savedPageInfo.url}
@@ -257,7 +272,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-800 hover:underline"
             >
-              Abrir página no Notion <ExternalLink className="w-3 h-3" />
+              Abrir no Notion <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         )}
@@ -276,7 +291,11 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           ) : (
             <>
               <FileCheck className="w-3.5 h-3.5" />
-              <span>Salvar no Notion</span>
+              <span>
+                {isSavingToPage && form.pageSaveMode === 'append_block'
+                  ? `Inserir em "${form.databaseTitle}"`
+                  : `Salvar em "${form.databaseTitle}"`}
+              </span>
             </>
           )}
         </button>

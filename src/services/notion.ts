@@ -1,4 +1,4 @@
-import type { NotionDatabase, NotionPropertySchema } from '../types';
+import type { NotionDestination, NotionPropertySchema, NotionDestinationType, PageSaveMode } from '../types';
 
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -70,62 +70,95 @@ export async function validateNotionApiKey(apiKey: string): Promise<{ valid: boo
 }
 
 /**
- * Busca todas as databases que a integração tem acesso
+ * Busca todas as databases E páginas que a integração tem acesso
  */
-export async function fetchDatabases(apiKey: string): Promise<NotionDatabase[]> {
+export async function fetchDestinations(apiKey: string): Promise<NotionDestination[]> {
   const data = await notionRequest<{
     results: any[];
   }>(apiKey, '/search', {
     method: 'POST',
     body: {
-      filter: {
-        value: 'database',
-        property: 'object',
-      },
       page_size: 100,
+      sort: {
+        direction: 'descending',
+        timestamp: 'last_edited_time',
+      },
     },
   });
 
-  return data.results.map((db: any) => {
-    let title = 'Sem título';
-    if (db.title && Array.isArray(db.title) && db.title.length > 0) {
-      title = db.title.map((t: any) => t.plain_text).join('');
+  const destinations: NotionDestination[] = [];
+
+  for (const item of data.results) {
+    let icon = '📄';
+    if (item.icon?.type === 'emoji') {
+      icon = item.icon.emoji;
+    } else if (item.icon?.type === 'external') {
+      icon = item.icon.external.url;
     }
 
-    let icon = '📁';
-    if (db.icon?.type === 'emoji') {
-      icon = db.icon.emoji;
-    } else if (db.icon?.type === 'external') {
-      icon = db.icon.external.url;
-    }
-
-    const properties: Record<string, NotionPropertySchema> = {};
-    if (db.properties) {
-      for (const [key, prop] of Object.entries<any>(db.properties)) {
-        properties[key] = {
-          id: prop.id,
-          name: prop.name,
-          type: prop.type,
-          select: prop.select,
-          multi_select: prop.multi_select,
-          status: prop.status,
-        };
+    if (item.object === 'database') {
+      let title = 'Base de Dados sem nome';
+      if (item.title && Array.isArray(item.title) && item.title.length > 0) {
+        title = item.title.map((t: any) => t.plain_text).join('');
       }
-    }
 
-    return {
-      id: db.id,
-      title: title || 'Base de Dados sem nome',
-      icon,
-      properties,
-    };
-  });
+      const properties: Record<string, NotionPropertySchema> = {};
+      if (item.properties) {
+        for (const [key, prop] of Object.entries<any>(item.properties)) {
+          properties[key] = {
+            id: prop.id,
+            name: prop.name,
+            type: prop.type,
+            select: prop.select,
+            multi_select: prop.multi_select,
+            status: prop.status,
+          };
+        }
+      }
+
+      destinations.push({
+        id: item.id,
+        title: title || 'Base de Dados sem nome',
+        icon: item.icon ? icon : '📁',
+        type: 'database',
+        properties,
+      });
+    } else if (item.object === 'page') {
+      // Ignora páginas que são apenas linhas/registros internos de uma Database
+      if (item.parent?.type === 'database_id') {
+        continue;
+      }
+
+      // Extrai o título da página
+      let title = 'Página sem nome';
+      if (item.properties) {
+        for (const prop of Object.values<any>(item.properties)) {
+          if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
+            title = prop.title.map((t: any) => t.plain_text).join('');
+            break;
+          }
+        }
+      }
+
+      destinations.push({
+        id: item.id,
+        title: title || 'Página sem nome',
+        icon: item.icon ? icon : '📄',
+        type: 'page',
+      });
+    }
+  }
+
+  return destinations;
 }
+
+// Mantém retrocompatibilidade de chamada
+export const fetchDatabases = fetchDestinations;
 
 /**
  * Obtém os detalhes e schema de uma database específica
  */
-export async function getDatabaseSchema(apiKey: string, databaseId: string): Promise<NotionDatabase> {
+export async function getDatabaseSchema(apiKey: string, databaseId: string): Promise<NotionDestination> {
   const db = await notionRequest<any>(apiKey, `/databases/${databaseId}`);
 
   let title = 'Sem título';
@@ -150,6 +183,8 @@ export async function getDatabaseSchema(apiKey: string, databaseId: string): Pro
   return {
     id: db.id,
     title,
+    icon: db.icon?.emoji || '📁',
+    type: 'database',
     properties,
   };
 }
@@ -226,19 +261,120 @@ export function formatNotionPropertyValue(type: string, value: any) {
 
 export interface CreatePageParams {
   apiKey: string;
-  databaseId: string;
-  properties: Record<string, { type: string; value: any }>;
+  destinationType?: NotionDestinationType;
+  destinationId: string;
+  pageSaveMode?: PageSaveMode;
+  title: string;
+  url?: string;
+  description?: string;
+  properties?: Record<string, { type: string; value: any }>;
   coverUrl?: string;
   iconUrl?: string;
   contentBlocks?: any[];
 }
 
 /**
- * Cria uma nova página na Database do Notion
+ * Salva no Notion: em Database ou em Página comum (Sub-página ou Append)
  */
 export async function createPage(params: CreatePageParams): Promise<{ id: string; url: string }> {
-  const { apiKey, databaseId, properties, coverUrl, iconUrl, contentBlocks } = params;
+  const {
+    apiKey,
+    destinationType = 'database',
+    destinationId,
+    pageSaveMode = 'subpage',
+    title,
+    url,
+    description,
+    properties = {},
+    coverUrl,
+    iconUrl,
+    contentBlocks = [],
+  } = params;
 
+  // CASO 1: Destino é uma PÁGINA e o modo é Inserir no final da página (Append)
+  if (destinationType === 'page' && pageSaveMode === 'append_block') {
+    const blocksToAppend: any[] = [];
+
+    // Bloco Callout ou Bookmark com o link
+    if (url) {
+      blocksToAppend.push({
+        object: 'block',
+        type: 'bookmark',
+        bookmark: {
+          url: url,
+        },
+      });
+    }
+
+    if (description) {
+      blocksToAppend.push({
+        object: 'block',
+        type: 'quote',
+        quote: {
+          rich_text: [{ type: 'text', text: { content: description } }],
+        },
+      });
+    }
+
+    if (contentBlocks.length > 0) {
+      blocksToAppend.push(...contentBlocks);
+    }
+
+    await notionRequest<any>(apiKey, `/blocks/${destinationId}/children`, {
+      method: 'PATCH',
+      body: {
+        children: blocksToAppend.slice(0, 100),
+      },
+    });
+
+    const pageDetails = await notionRequest<any>(apiKey, `/pages/${destinationId}`);
+    return {
+      id: destinationId,
+      url: pageDetails.url || `https://notion.so/${destinationId.replace(/-/g, '')}`,
+    };
+  }
+
+  // CASO 2: Destino é uma PÁGINA como Sub-página
+  if (destinationType === 'page') {
+    const payload: any = {
+      parent: { page_id: destinationId },
+      properties: {
+        title: {
+          title: [{ type: 'text', text: { content: title || 'Página salva' } }],
+        },
+      },
+    };
+
+    if (coverUrl && coverUrl.startsWith('http')) {
+      payload.cover = {
+        type: 'external',
+        external: { url: coverUrl },
+      };
+    }
+
+    if (iconUrl && iconUrl.startsWith('http')) {
+      payload.icon = {
+        type: 'external',
+        external: { url: iconUrl },
+      };
+    }
+
+    if (contentBlocks && contentBlocks.length > 0) {
+      payload.children = contentBlocks.slice(0, 100);
+    }
+
+    const response = await notionRequest<any>(apiKey, '/pages', {
+      method: 'POST',
+      body: payload,
+    });
+
+    return {
+      id: response.id,
+      url: response.url,
+    };
+  }
+
+  // CASO 3: Destino é uma DATABASE
   const formattedProperties: Record<string, any> = {};
 
   for (const [propName, propData] of Object.entries(properties)) {
@@ -249,30 +385,25 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
   }
 
   const payload: any = {
-    parent: { database_id: databaseId },
+    parent: { database_id: destinationId },
     properties: formattedProperties,
   };
 
   if (coverUrl && coverUrl.startsWith('http')) {
     payload.cover = {
       type: 'external',
-      external: {
-        url: coverUrl,
-      },
+      external: { url: coverUrl },
     };
   }
 
   if (iconUrl && iconUrl.startsWith('http')) {
     payload.icon = {
       type: 'external',
-      external: {
-        url: iconUrl,
-      },
+      external: { url: iconUrl },
     };
   }
 
   if (contentBlocks && contentBlocks.length > 0) {
-    // Notion API limita o primeiro lote a 100 blocos
     payload.children = contentBlocks.slice(0, 100);
   }
 

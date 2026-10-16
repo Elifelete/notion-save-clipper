@@ -1,10 +1,15 @@
-export interface NotionDatabase {
+export type NotionDestinationType = 'database' | 'page';
+
+export interface NotionDestination {
   id: string;
   title: string;
   icon?: string;
-  description?: string;
-  properties: Record<string, NotionPropertySchema>;
+  type: NotionDestinationType;
+  properties?: Record<string, NotionPropertySchema>;
 }
+
+// Para manter retrocompatibilidade de nomes
+export type NotionDatabase = NotionDestination;
 
 export type NotionPropertyType =
   | 'title'
@@ -57,13 +62,17 @@ export interface PropertyFieldMapping {
   required?: boolean;
 }
 
+export type PageSaveMode = 'subpage' | 'append_block';
+
 export interface FormConfig {
   id: string;
   name: string;
   icon: string;
-  databaseId: string;
-  databaseTitle: string;
-  clipContent: boolean; // true = extrai corpo do artigo, false = bookmark simples
+  destinationType: NotionDestinationType; // 'database' | 'page'
+  databaseId: string;                     // ID da database ou da página de destino
+  databaseTitle: string;                  // Nome da database ou da página de destino
+  pageSaveMode?: PageSaveMode;            // 'subpage' ou 'append_block' (usado quando destinationType === 'page')
+  clipContent: boolean;                   // true = extrai corpo do artigo, false = bookmark simples
   mappings: PropertyFieldMapping[];
   createdAt: number;
 }
