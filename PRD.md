@@ -79,6 +79,7 @@ graph TD
   - Miniatura da capa extraída (com botão para trocar ou remover).
   - Seletor visual interativo de capa com imagens extraídas do DOM da página ativa ou link customizado.
   - Título editável e URL.
+  - Alternador dinâmico de Modo de Leitura (*Artigo Completo* vs *Apenas Bookmark*) com contagem de palavras e tempo estimado.
   - Campos de propriedades nativos do Notion:
     - **Select / Multi-select**: Exibe as opções existentes no Notion com suas respectivas cores oficiais e badges; permite adicionar tags dinamicamente.
     - **Date**: Datepicker nativo com botão de limpar.
@@ -92,11 +93,16 @@ graph TD
 - Utilização de `@mozilla/readability` para remover anúncios, sidebars, modais de cookie e capturar apenas o texto limpo do artigo.
 - Conversão limpa de elementos HTML para os blocos nativos do Notion:
   - Títulos `h1`, `h2`, `h3` -> `heading_1`, `heading_2`, `heading_3`
-  - Parágrafos de texto com negrito, itálico, código inline e links
+  - Parágrafos de texto com negrito, itálico, tachado, sublinhado, código inline e links
   - Citações `blockquote` -> `quote`
   - Listas ordenadas e não ordenadas -> `bulleted_list_item` e `numbered_list_item`
   - Blocos de código `pre code` -> `code`
   - Imagens `img` -> `image` (external url)
+  - Divisores `hr` -> `divider`
+- Tratamento dedicado para páginas especiais:
+  - **YouTube**: Embed do player de vídeo nativo no Notion.
+  - **GitHub**: Exibição limpa de metadados do repositório e README.
+- Chunking automático de artigos longos (+100 blocos) via lotes da Notion API.
 
 ### 5.5 Marcador de Texto (Highlighter)
 - Selecionar texto na página e clicar com o botão direito ou num floating tooltip para salvar o trecho destacado como citação na página do Notion.
@@ -141,14 +147,16 @@ graph TD
 - [x] Datepicker nativo, Checkboxes interativos, campos numéricos e textarea no popup.
 - [x] Seletor visual interativo de imagens da página para capa (inspeção do DOM com grid de miniaturas e suporte a URL externa).
 
-### Fase 3: Extração de Artigo Completo (Readability) (Próxima)
-- [ ] Captura do corpo inteiro do artigo com `@mozilla/readability`.
-- [ ] Parser HTML para blocos nativos do Notion (headings, quotes, code, bullet lists).
-- [ ] Suporte inteligente a links do YouTube, GitHub e Twitter.
+### Fase 3: Extração de Artigo Completo (Readability) (Concluído)
+- [x] Captura do corpo inteiro do artigo com `@mozilla/readability` (limpeza de ads, navegação e modais).
+- [x] Parser HTML para blocos nativos do Notion (headings h1/h2/h3, parágrafos formatados, quotes, bullet lists, numbered lists, code blocks, imagens e divisores).
+- [x] Suporte inteligente a links especiais (YouTube player embed, GitHub repo stats/README, Twitter).
+- [x] Suporte a chunking/paginação para artigos longos (+100 blocos) via lotes da Notion API.
+- [x] Indicador de tempo de leitura e contagem de palavras com toggle rápido no popup.
 
-### Fase 4: Highlighter & Polish
+### Fase 4: Highlighter & Polish (Próxima)
 - [ ] Ferramenta de Highlighter para marcar textos na página web e salvar trechos.
-- [ ] Captura de screenshot da tela ativa.
+- [ ] Captura de screenshot da tela ativa (`chrome.tabs.captureVisibleTab`).
 - [ ] Detecção de links já salvos para evitar duplicidade.
 
 ### Fase 5: Backend Cloudflare Workers & Notion OAuth 2.0 (Zero-Config)

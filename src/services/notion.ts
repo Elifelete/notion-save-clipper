@@ -332,7 +332,7 @@ export interface CreatePageParams {
 }
 
 /**
- * Salva no Notion: em Database ou em Página comum (Sub-página ou Append)
+ * Salva no Notion: em Database ou em Página comum (Sub-página ou Append), com suporte a paginação de blocos
  */
 export async function createPage(params: CreatePageParams): Promise<{ id: string; url: string }> {
   const {
@@ -378,12 +378,24 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
       blocksToAppend.push(...contentBlocks);
     }
 
+    // Envia o primeiro lote de até 100 blocos
     await notionRequest<any>(apiKey, `/blocks/${destinationId}/children`, {
       method: 'PATCH',
       body: {
         children: blocksToAppend.slice(0, 100),
       },
     });
+
+    // Se houver mais de 100 blocos, anexa os excedentes em lotes subsequentes
+    if (blocksToAppend.length > 100) {
+      for (let i = 100; i < blocksToAppend.length; i += 100) {
+        const batch = blocksToAppend.slice(i, i + 100);
+        await notionRequest<any>(apiKey, `/blocks/${destinationId}/children`, {
+          method: 'PATCH',
+          body: { children: batch },
+        });
+      }
+    }
 
     const pageDetails = await notionRequest<any>(apiKey, `/pages/${destinationId}`);
     return {
@@ -425,6 +437,17 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
       method: 'POST',
       body: payload,
     });
+
+    // Anexa blocos excedentes (acima de 100)
+    if (contentBlocks && contentBlocks.length > 100) {
+      for (let i = 100; i < contentBlocks.length; i += 100) {
+        const batch = contentBlocks.slice(i, i + 100);
+        await notionRequest<any>(apiKey, `/blocks/${response.id}/children`, {
+          method: 'PATCH',
+          body: { children: batch },
+        });
+      }
+    }
 
     return {
       id: response.id,
@@ -469,6 +492,17 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
     method: 'POST',
     body: payload,
   });
+
+  // Anexa blocos excedentes (acima de 100)
+  if (contentBlocks && contentBlocks.length > 100) {
+    for (let i = 100; i < contentBlocks.length; i += 100) {
+      const batch = contentBlocks.slice(i, i + 100);
+      await notionRequest<any>(apiKey, `/blocks/${response.id}/children`, {
+        method: 'PATCH',
+        body: { children: batch },
+      });
+    }
+  }
 
   return {
     id: response.id,

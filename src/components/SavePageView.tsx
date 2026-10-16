@@ -5,9 +5,16 @@ import {
   AlertCircle,
   Loader2,
   FileCheck,
+  BookOpen,
+  Bookmark,
+  Clock,
+  Sparkles,
+  Video,
+  Code2,
 } from 'lucide-react';
 import type { FormConfig, ExtractedMetadata } from '../types';
 import { createPage } from '../services/notion';
+import { getActiveTabArticle, detectSpecialPage, type ArticleParsedContent } from '../services/reader';
 import { CoverImagePicker } from './CoverImagePicker';
 import { PropertyField } from './PropertyField';
 
@@ -29,19 +36,27 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   const [coverUrl, setCoverUrl] = useState<string | undefined>(metadata.coverImage);
   const [propertyValues, setPropertyValues] = useState<Record<string, any>>({});
 
+  // Controle de extração de artigo
+  const [clipContent, setClipContent] = useState(form.clipContent ?? true);
+  const [articleData, setArticleData] = useState<ArticleParsedContent | null>(null);
+  const [loadingArticle, setLoadingArticle] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [savedPageInfo, setSavedPageInfo] = useState<{ id: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const specialType = detectSpecialPage(url);
 
   useEffect(() => {
     setTitle(metadata.title || '');
     setUrl(metadata.url || '');
     setDescription(metadata.description || '');
     setCoverUrl(metadata.coverImage);
+    setClipContent(form.clipContent ?? true);
     setSavedPageInfo(null);
     setError(null);
 
-    // Inicializa valores padrão das propriedades configuradas no formulário
+    // Inicializa propriedades
     const initialProps: Record<string, any> = {};
     if (form.mappings) {
       for (const m of form.mappings) {
@@ -51,6 +66,23 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
       }
     }
     setPropertyValues(initialProps);
+
+    // Extrai o conteúdo do artigo via Readability
+    if (form.clipContent) {
+      setLoadingArticle(true);
+      getActiveTabArticle()
+        .then((art) => {
+          if (art) {
+            setArticleData(art);
+            if (art.excerpt && !description) {
+              setDescription(art.excerpt);
+            }
+          }
+        })
+        .finally(() => {
+          setLoadingArticle(false);
+        });
+    }
   }, [metadata, form]);
 
   const handlePropertyValueChange = (propertyId: string, val: any) => {
@@ -100,9 +132,20 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         }
       }
 
-      // Preparação dos blocos de conteúdo
+      // Preparação dos blocos de conteúdo para o Notion
       const contentBlocks: any[] = [];
-      if (form.clipContent) {
+
+      // Caso 1: Suporte Especial para YouTube
+      if (specialType === 'youtube' && url) {
+        contentBlocks.push({
+          object: 'block',
+          type: 'video',
+          video: {
+            type: 'external',
+            external: { url: url },
+          },
+        });
+
         if (description) {
           contentBlocks.push({
             object: 'block',
@@ -112,20 +155,30 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             },
           });
         }
+      }
+      // Caso 2: Artigo Completo Extraído via Readability
+      else if (clipContent && articleData && articleData.blocks.length > 0) {
+        contentBlocks.push(...articleData.blocks);
+      }
+      // Caso 3: Bookmark Simples com Citação
+      else {
+        if (url) {
+          contentBlocks.push({
+            object: 'block',
+            type: 'bookmark',
+            bookmark: { url: url },
+          });
+        }
 
-        contentBlocks.push({
-          object: 'block',
-          type: 'paragraph',
-          paragraph: {
-            rich_text: [
-              { type: 'text', text: { content: 'Artigo original salvo de: ' } },
-              {
-                type: 'text',
-                text: { content: url, link: { url: url } },
-              },
-            ],
-          },
-        });
+        if (description) {
+          contentBlocks.push({
+            object: 'block',
+            type: 'quote',
+            quote: {
+              rich_text: [{ type: 'text', text: { content: description } }],
+            },
+          });
+        }
       }
 
       const result = await createPage({
@@ -159,6 +212,61 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         coverUrl={coverUrl}
         onSelectCover={(url) => setCoverUrl(url)}
       />
+
+      {/* Badge Informativo de Tipo de Página / Leitura */}
+      {specialType === 'youtube' ? (
+        <div className="p-2 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between text-[11px] text-red-800">
+          <div className="flex items-center gap-1.5 font-medium">
+            <Video className="w-4 h-4 text-red-600" />
+            <span>Vídeo do YouTube detectado</span>
+          </div>
+          <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">
+            Embed Player
+          </span>
+        </div>
+      ) : specialType === 'github' ? (
+        <div className="p-2 bg-gray-100 border border-gray-300 rounded-lg flex items-center justify-between text-[11px] text-gray-800">
+          <div className="flex items-center gap-1.5 font-medium">
+            <Code2 className="w-4 h-4 text-black" />
+            <span>Repositório GitHub detectado</span>
+          </div>
+          <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded font-semibold">
+            README + Stats
+          </span>
+        </div>
+      ) : (
+        /* Alternador de Modo de Salvamento: Artigo Completo vs Bookmark */
+        <div className="flex items-center justify-between p-2 bg-blue-50/60 border border-blue-100 rounded-lg">
+          <div className="flex items-center gap-1.5 text-blue-950">
+            {clipContent ? (
+              <BookOpen className="w-4 h-4 text-blue-600" />
+            ) : (
+              <Bookmark className="w-4 h-4 text-gray-500" />
+            )}
+            <div>
+              <div className="font-semibold text-[11px]">
+                {clipContent ? 'Modo Leitura (Artigo Completo)' : 'Apenas Bookmark'}
+              </div>
+              {clipContent && articleData && (
+                <div className="text-[10px] text-blue-700 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    ~{articleData.readingTimeMinutes} min ({articleData.wordCount} palavras)
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setClipContent(!clipContent)}
+            className="text-[10px] font-medium text-blue-600 hover:text-blue-800 underline cursor-pointer"
+          >
+            {clipContent ? 'Salvar só link' : 'Extrair texto'}
+          </button>
+        </div>
+      )}
 
       {/* Formulário de salvamento */}
       <form onSubmit={handleSave} className="space-y-3">
@@ -260,7 +368,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         {/* Botão de Ação Principal */}
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || loadingArticle}
           className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-xs rounded-md shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
         >
           {saving ? (
