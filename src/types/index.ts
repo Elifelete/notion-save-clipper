@@ -6,6 +6,7 @@ export interface NotionDestination {
   icon?: string;
   type: NotionDestinationType;
   path?: string; // Ex: "My Life / ... / Projects" ou "Workspace"
+  url?: string;  // URL direta da página ou database no Notion
   properties?: Record<string, NotionPropertySchema>;
 }
 
@@ -79,6 +80,7 @@ export interface FormConfig {
   destinationType: NotionDestinationType; // 'database' | 'page'
   databaseId: string;                     // ID da database ou da página de destino
   databaseTitle: string;                  // Nome da database ou da página de destino
+  destinationUrl?: string;                // Link direto no Notion
   pageSaveMode?: PageSaveMode;            // 'subpage' ou 'append_block' (usado quando destinationType === 'page')
   clipContent: boolean;                   // true = extrai corpo do artigo, false = bookmark simples
   mappings: PropertyFieldMapping[];
@@ -99,6 +101,5 @@ export interface ExtractedMetadata {
 
 export interface UserSettings {
   apiKey: string;
-  forms: FormConfig[];
-  defaultFormId?: string;
+  defaultDatabaseId?: string;
 }

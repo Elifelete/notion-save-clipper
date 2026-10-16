@@ -7,6 +7,7 @@ import {
   Sparkles,
   History,
   X,
+  ExternalLink,
 } from 'lucide-react';
 import type { FormConfig } from '../types';
 
@@ -29,17 +30,17 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
 }) => {
   const [bannerClosed, setBannerClosed] = useState(false);
 
-  const showBanner = Boolean(justCreatedFormName && !bannerClosed);
-
+  // Fecha o iframe embutido na página via postMessage
   const handleClose = () => {
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ action: 'NOTION_SAVE_CLOSE' }, '*');
     }
-    window.close();
   };
 
+  const showBanner = !!justCreatedFormName && !bannerClosed;
+
   return (
-    <div className="flex flex-col min-h-[480px] w-full bg-[#f8f9fa] text-xs text-gray-800">
+    <div className="flex flex-col min-h-[460px] w-full bg-[#f8f9fa] text-xs text-gray-800">
       {/* Top Header Estilo Save.to */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100">
         <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
@@ -112,28 +113,48 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
             </div>
           ) : (
             forms.map((form) => (
-              <button
+              <div
                 key={form.id}
-                type="button"
-                onClick={() => onSelectForm(form.id)}
-                className="w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50/80 active:bg-gray-100 border border-gray-200/90 rounded-xl shadow-2xs transition-all text-left cursor-pointer group"
+                className="w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50/80 border border-gray-200/90 rounded-xl shadow-2xs transition-all text-left group"
               >
-                <div className="flex items-center gap-3 truncate">
+                <button
+                  type="button"
+                  onClick={() => onSelectForm(form.id)}
+                  className="flex items-center gap-3 truncate flex-1 min-w-0 cursor-pointer text-left"
+                >
                   <span className="text-xl shrink-0 p-1 bg-gray-50 rounded-lg group-hover:bg-white transition-colors">
                     {form.icon || '🔖'}
                   </span>
-                  <div className="truncate">
-                    <div className="font-bold text-xs text-gray-900 truncate">
+                  <div className="truncate flex-1 min-w-0">
+                    <div className="font-bold text-xs text-gray-900 truncate group-hover:text-blue-600 transition-colors">
                       {form.name}
                     </div>
                     <div className="text-[10px] text-gray-400 truncate">
                       {form.databaseTitle}
                     </div>
                   </div>
-                </div>
+                </button>
 
-                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600 transition-colors shrink-0 ml-2" />
-              </button>
+                <div className="flex items-center gap-1 shrink-0 ml-2">
+                  <a
+                    href={form.destinationUrl || `https://www.notion.so/${form.databaseId.replace(/-/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Abrir no Notion em nova aba"
+                    className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onSelectForm(form.id)}
+                    className="p-1 text-gray-300 group-hover:text-gray-600 cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             ))
           )}
         </div>

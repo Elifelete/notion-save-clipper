@@ -28,6 +28,7 @@ import {
   Hash,
   ToggleLeft,
   FileSpreadsheet,
+  ExternalLink,
 } from 'lucide-react';
 import type { NotionDestination, FormConfig, PropertyFieldMapping, PageSaveMode, PropertyDataSource } from '../types';
 import { fetchDestinations, getDatabaseSchema } from '../services/notion';
@@ -270,6 +271,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         destinationType: selectedDestination.type,
         databaseId: selectedDestination.id,
         databaseTitle: selectedDestination.title,
+        destinationUrl: selectedDestination.url,
         pageSaveMode: selectedDestination.type === 'page' ? pageSaveMode : undefined,
         clipContent: clipAction === 'article',
         mappings,
@@ -430,24 +432,39 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                   </div>
                   <div className="space-y-1">
                     {databaseItems.map((db) => (
-                      <button
+                      <div
                         key={db.id}
-                        type="button"
-                        onClick={() => handleSelectLocation(db)}
-                        className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left cursor-pointer group"
+                        className="w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left group"
                       >
-                        <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
-                          {db.icon || '📁'}
-                        </span>
-                        <div className="truncate flex-1">
-                          <div className="font-semibold text-gray-900 truncate text-xs">
-                            {db.title}
+                        <button
+                          type="button"
+                          onClick={() => handleSelectLocation(db)}
+                          className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
+                        >
+                          <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
+                            {db.icon || '📁'}
+                          </span>
+                          <div className="truncate flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">
+                              {db.title}
+                            </div>
+                            <div className="text-[10px] text-gray-400 truncate">
+                              {db.path || 'Workspace'}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-400 truncate">
-                            {db.path || 'Workspace'}
-                          </div>
-                        </div>
-                      </button>
+                        </button>
+
+                        <a
+                          href={db.url || `https://www.notion.so/${db.id.replace(/-/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Abrir no Notion em nova aba"
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -460,24 +477,39 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                   </div>
                   <div className="space-y-1">
                     {pageItems.map((pg) => (
-                      <button
+                      <div
                         key={pg.id}
-                        type="button"
-                        onClick={() => handleSelectLocation(pg)}
-                        className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left cursor-pointer group"
+                        className="w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left group"
                       >
-                        <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
-                          {pg.icon || '📄'}
-                        </span>
-                        <div className="truncate flex-1">
-                          <div className="font-semibold text-gray-900 truncate text-xs">
-                            {pg.title}
+                        <button
+                          type="button"
+                          onClick={() => handleSelectLocation(pg)}
+                          className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
+                        >
+                          <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
+                            {pg.icon || '📄'}
+                          </span>
+                          <div className="truncate flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">
+                              {pg.title}
+                            </div>
+                            <div className="text-[10px] text-gray-400 truncate">
+                              {pg.path || 'Workspace'}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-400 truncate">
-                            {pg.path || 'Workspace'}
-                          </div>
-                        </div>
-                      </button>
+                        </button>
+
+                        <a
+                          href={pg.url || `https://www.notion.so/${pg.id.replace(/-/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Abrir no Notion em nova aba"
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -492,11 +524,6 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   // TELA PRINCIPAL: Create Form (Design Idêntico ao Save.to)
   const visibleFields = showAllFields ? mappings : mappings.slice(0, 2);
   const hiddenFieldsCount = Math.max(0, mappings.length - 2);
-
-  // Lista de propriedades da Database que ainda NÃO foram adicionadas aos Fields
-  const availableDatabaseProperties = Object.entries(databaseProperties).filter(
-    ([_, prop]: any) => !mappings.some((m) => m.notionPropertyId === prop.id)
-  );
 
   return (
     <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa]">
@@ -569,15 +596,28 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
             {/* Linha 2: Save Location */}
             <div className="flex items-center justify-between pt-1">
               <span className="font-semibold text-gray-700 text-xs">Save Location</span>
-              <button
-                type="button"
-                onClick={() => setStep('select_location')}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-medium text-[11px] transition-colors cursor-pointer max-w-[200px]"
-              >
-                <span className="text-xs">{selectedDestination?.icon || '📁'}</span>
-                <span className="truncate">{selectedDestination?.title || 'Selecionar local'}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setStep('select_location')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-medium text-[11px] transition-colors cursor-pointer max-w-[190px]"
+                >
+                  <span className="text-xs">{selectedDestination?.icon || '📁'}</span>
+                  <span className="truncate">{selectedDestination?.title || 'Selecionar local'}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                </button>
+                {selectedDestination && (
+                  <a
+                    href={selectedDestination.url || `https://www.notion.so/${selectedDestination.id.replace(/-/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Abrir este local no Notion"
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors cursor-pointer shrink-0"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Se o local for uma página comum: Escolha Sub-página vs Append */}

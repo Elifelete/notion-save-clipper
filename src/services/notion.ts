@@ -69,6 +69,55 @@ export async function validateNotionApiKey(apiKey: string): Promise<{ valid: boo
   }
 }
 
+const parentCache = new Map<string, { title: string; parentId?: string; parentType?: string }>();
+
+async function resolveParentInfo(
+  apiKey: string,
+  parentId: string,
+  parentType?: string
+): Promise<{ title: string; parentId?: string; parentType?: string } | null> {
+  if (parentCache.has(parentId)) {
+    return parentCache.get(parentId)!;
+  }
+
+  try {
+    if (parentType === 'database_id') {
+      const db = await notionRequest<any>(apiKey, `/databases/${parentId}`);
+      let title = 'Base de Dados';
+      if (db.title && Array.isArray(db.title) && db.title.length > 0) {
+        title = db.title.map((t: any) => t.plain_text).join('');
+      }
+      const info = {
+        title,
+        parentId: db.parent?.page_id || db.parent?.database_id || db.parent?.block_id,
+        parentType: db.parent?.type,
+      };
+      parentCache.set(parentId, info);
+      return info;
+    } else {
+      const page = await notionRequest<any>(apiKey, `/pages/${parentId}`);
+      let title = 'Página';
+      if (page.properties) {
+        for (const prop of Object.values<any>(page.properties)) {
+          if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
+            title = prop.title.map((t: any) => t.plain_text).join('');
+            break;
+          }
+        }
+      }
+      const info = {
+        title,
+        parentId: page.parent?.page_id || page.parent?.database_id || page.parent?.block_id,
+        parentType: page.parent?.type,
+      };
+      parentCache.set(parentId, info);
+      return info;
+    }
+  } catch {
+    return null;
+  }
+}
+
 interface RawNotionSearchItem {
   id: string;
   title: string;
@@ -76,11 +125,12 @@ interface RawNotionSearchItem {
   type: NotionDestinationType;
   parentId?: string;
   parentType?: string;
+  url?: string;
   properties?: Record<string, NotionPropertySchema>;
 }
 
 /**
- * Busca todas as databases E páginas que a integração tem acesso, calculando hierarquia
+ * Busca todas as databases E páginas que a integração tem acesso, calculando hierarquia e caminhos
  */
 export async function fetchDestinations(apiKey: string): Promise<NotionDestination[]> {
   const data = await notionRequest<{
@@ -109,6 +159,7 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
 
     const parentId = item.parent?.page_id || item.parent?.database_id || item.parent?.block_id;
     const parentType = item.parent?.type;
+    const itemUrl = item.url || `https://www.notion.so/${item.id.replace(/-/g, '')}`;
 
     if (item.object === 'database') {
       let title = 'Base de Dados sem nome';
@@ -137,6 +188,7 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
         type: 'database',
         parentId,
         parentType,
+        url: itemUrl,
         properties,
       };
 
@@ -166,6 +218,7 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
         type: 'page',
         parentId,
         parentType,
+        url: itemUrl,
       };
 
       rawItems.push(parsed);
@@ -173,28 +226,52 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
     }
   }
 
-  // Segunda passagem: constrói breadcrumb hierárquico igual ao Save.to (ex: "My Life / ... / Projects")
+  // Resolve pais ausentes que não foram retornados diretamente na busca inicial
+  const missingParents = new Set<string>();
+  for (const item of rawItems) {
+    if (item.parentId && !idToItemMap.has(item.parentId) && item.parentType !== 'workspace') {
+      missingParents.add(item.parentId);
+    }
+  }
+
+  if (missingParents.size > 0) {
+    await Promise.all(
+      Array.from(missingParents).map(async (pId) => {
+        const sampleItem = rawItems.find((r) => r.parentId === pId);
+        const info = await resolveParentInfo(apiKey, pId, sampleItem?.parentType);
+        if (info) {
+          idToItemMap.set(pId, {
+            id: pId,
+            title: info.title,
+            type: 'page',
+            parentId: info.parentId,
+            parentType: info.parentType,
+          });
+        }
+      })
+    );
+  }
+
+  // Constrói breadcrumb hierárquico com caminho completo (ex: "Workspace / Projetos / sites")
   const destinations: NotionDestination[] = rawItems.map((item) => {
     const pathParts: string[] = [];
     let currParentId = item.parentId;
 
-    while (currParentId && idToItemMap.has(currParentId) && pathParts.length < 3) {
+    while (currParentId && idToItemMap.has(currParentId) && pathParts.length < 4) {
       const parentObj = idToItemMap.get(currParentId)!;
       pathParts.unshift(parentObj.title);
       currParentId = parentObj.parentId;
     }
 
     let path = 'Workspace';
-    const firstPart = pathParts[0];
-    const secondPart = pathParts[1];
-    const lastPart = pathParts[pathParts.length - 1];
-
-    if (pathParts.length === 1 && firstPart) {
-      path = firstPart;
-    } else if (pathParts.length === 2 && firstPart && secondPart) {
-      path = `${firstPart} / ${secondPart}`;
-    } else if (pathParts.length >= 3 && firstPart && lastPart) {
-      path = `${firstPart} / ... / ${lastPart}`;
+    if (pathParts.length === 1) {
+      path = `Workspace / ${pathParts[0]}`;
+    } else if (pathParts.length === 2) {
+      path = `Workspace / ${pathParts[0]} / ${pathParts[1]}`;
+    } else if (pathParts.length >= 3) {
+      path = `Workspace / ... / ${pathParts[pathParts.length - 1]}`;
+    } else if (item.parentType === 'workspace') {
+      path = 'Workspace (Raiz)';
     }
 
     return {
@@ -203,6 +280,7 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
       icon: item.icon,
       type: item.type,
       path,
+      url: item.url || `https://www.notion.so/${item.id.replace(/-/g, '')}`,
       properties: item.properties,
     };
   });
@@ -271,6 +349,7 @@ export async function getDatabaseSchema(apiKey: string, databaseId: string): Pro
     title,
     icon: db.icon?.emoji || '📁',
     type: 'database',
+    url: db.url || `https://www.notion.so/${db.id.replace(/-/g, '')}`,
     properties,
   };
 }

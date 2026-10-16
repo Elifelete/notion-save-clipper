@@ -54,7 +54,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     form.clipContent ? 'content' : 'bookmark'
   );
 
-  // Expansão de campos extras (Save.to: "⌄ 4 more fields")
+  // Expansão de campos extras (Save.to: "⌵ 4 more fields")
   const [showMoreFields, setShowMoreFields] = useState(false);
   const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false);
 
@@ -327,7 +327,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         </div>
       </div>
 
-      {/* Barra de Navegação do Formulário: [<] [🔖 Form Name] [⚙️] */}
+      {/* Barra de Navegação do Formulário: [<] [🔖 Form Name] [🔗] [⚙️] */}
       <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-gray-200">
         <button
           type="button"
@@ -338,19 +338,30 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           <ChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-1.5 font-bold text-sm text-gray-900 truncate max-w-[240px]">
+        <div className="flex items-center gap-1.5 font-bold text-sm text-gray-900 truncate max-w-[200px]">
           <span className="text-base">{form.icon || '🔖'}</span>
           <span className="truncate">{form.name}</span>
         </div>
 
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          title="Configurações do Formulário"
-          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <a
+            href={form.destinationUrl || `https://www.notion.so/${form.databaseId.replace(/-/g, '')}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Abrir no Notion em nova aba"
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            title="Configurações do Formulário"
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSave} className="p-3.5 space-y-3 flex-1 flex flex-col justify-between">
@@ -398,7 +409,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             />
           </div>
 
-          {/* Campos Ocultos / Expandíveis (Save.to: "⌄ 4 more fields") */}
+          {/* Campos Ocultos / Expandíveis (Save.to: "⌵ 4 more fields") */}
           {showMoreFields ? (
             <div className="space-y-3 pt-1 border-t border-gray-100 animate-fadeIn">
               {/* Content Image (🖼️ Content Image) */}
@@ -568,7 +579,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
               </button>
             </div>
           ) : (
-            /* Botão de Expandir Campos Extras (Save.to: "⌄ 4 more fields") */
+            /* Botão de Expandir Campos Extras (Save.to: "⌵ 4 more fields") */
             <button
               type="button"
               onClick={() => setShowMoreFields(true)}
