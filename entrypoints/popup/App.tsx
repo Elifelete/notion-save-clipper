@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from '@/src/components/Header';
 import { SettingsView } from '@/src/components/SettingsView';
 import { CreateFormView } from '@/src/components/CreateFormView';
 import { SavePageView } from '@/src/components/SavePageView';
+import { SelectFormView } from '@/src/components/SelectFormView';
 import { getApiKey, getForms, getDefaultFormId, setDefaultFormId } from '@/src/services/storage';
 import { getActiveTabMetadata } from '@/src/services/extractor';
 import type { FormConfig, ExtractedMetadata } from '@/src/types';
-import { Loader2, Plus, Sparkles } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export default function App() {
   const [apiKey, setApiKey] = useState<string>('');
@@ -14,7 +14,10 @@ export default function App() {
   const [selectedFormId, setSelectedFormIdState] = useState<string>('');
   const [metadata, setMetadata] = useState<ExtractedMetadata | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'save' | 'settings' | 'create_form'>('save');
+
+  // Telas: 'select_form' (Home estilo Save.to), 'save' (Save to Notion), 'create_form', 'settings'
+  const [currentView, setCurrentView] = useState<'select_form' | 'save' | 'settings' | 'create_form'>('select_form');
+  const [justCreatedFormName, setJustCreatedFormName] = useState<string | null>(null);
 
   const loadInitialData = async () => {
     setLoading(true);
@@ -36,6 +39,7 @@ export default function App() {
         const activeId =
           storedForms.find((f) => f.id === defaultId)?.id || (storedForms[0] ? storedForms[0].id : '');
         setSelectedFormIdState(activeId);
+        // Inicia na tela de salvar se já houver um form ativo padrão, ou na Home
         setCurrentView('save');
       }
     } catch (e) {
@@ -52,6 +56,7 @@ export default function App() {
   const handleSelectForm = async (id: string) => {
     setSelectedFormIdState(id);
     await setDefaultFormId(id);
+    setCurrentView('save');
   };
 
   const handleApiKeySaved = async () => {
@@ -62,7 +67,7 @@ export default function App() {
     if (updatedForms.length === 0) {
       setCurrentView('create_form');
     } else {
-      setCurrentView('save');
+      setCurrentView('select_form');
     }
   };
 
@@ -71,7 +76,9 @@ export default function App() {
     setForms(updatedForms);
     setSelectedFormIdState(newForm.id);
     await setDefaultFormId(newForm.id);
-    setCurrentView('save');
+    setJustCreatedFormName(newForm.name);
+    // Leva para a tela inicial (Select Form) exibindo o banner azul de confirmação
+    setCurrentView('select_form');
   };
 
   if (loading) {
@@ -85,65 +92,49 @@ export default function App() {
   const selectedForm = forms.find((f) => f.id === selectedFormId) || forms[0];
 
   return (
-    <div className="flex flex-col min-h-[480px] bg-white font-sans text-gray-900 select-none">
-      <Header
-        forms={forms}
-        selectedFormId={selectedFormId}
-        onSelectForm={handleSelectForm}
-        onOpenSettings={() => setCurrentView('settings')}
-        onOpenCreateForm={() => setCurrentView('create_form')}
-        currentView={currentView}
-        onBackToSave={() => setCurrentView('save')}
-      />
-
+    <div className="flex flex-col min-h-[480px] w-[350px] bg-white font-sans text-gray-900 select-none overflow-x-hidden">
       <main className="flex-1 overflow-y-auto">
-        {currentView === 'settings' && (
-          <SettingsView
-            onApiKeySaved={handleApiKeySaved}
-            onNavigateToCreateForm={() => setCurrentView('create_form')}
+        {/* TELA 1: Select Form (Home) */}
+        {currentView === 'select_form' && (
+          <SelectFormView
+            forms={forms}
+            onSelectForm={handleSelectForm}
+            onOpenCreateForm={() => setCurrentView('create_form')}
+            onOpenSettings={() => setCurrentView('settings')}
+            justCreatedFormName={justCreatedFormName}
+            onDismissBanner={() => setJustCreatedFormName(null)}
           />
         )}
 
+        {/* TELA 2: Save Page (Save to Notion) */}
+        {currentView === 'save' && selectedForm && metadata && (
+          <SavePageView
+            apiKey={apiKey}
+            form={selectedForm}
+            metadata={metadata}
+            onBackToSelectForm={() => setCurrentView('select_form')}
+            onOpenSettings={() => setCurrentView('settings')}
+          />
+        )}
+
+        {/* TELA 3: Create Form */}
         {currentView === 'create_form' && (
           <CreateFormView
             apiKey={apiKey}
             onFormCreated={handleFormCreated}
             onCancel={() => {
-              if (forms.length > 0) setCurrentView('save');
+              if (forms.length > 0) setCurrentView('select_form');
               else setCurrentView('settings');
             }}
           />
         )}
 
-        {currentView === 'save' && (
-          <>
-            {forms.length === 0 || !selectedForm ? (
-              <div className="p-6 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <h3 className="font-semibold text-sm text-gray-900">Nenhum Formulário Configurado</h3>
-                <p className="text-xs text-gray-500">
-                  Crie seu primeiro formulário personalizado para começar a salvar páginas no Notion.
-                </p>
-                <button
-                  onClick={() => setCurrentView('create_form')}
-                  className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-md shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  Criar Primeiro Form
-                </button>
-              </div>
-            ) : (
-              metadata && (
-                <SavePageView
-                  apiKey={apiKey}
-                  form={selectedForm}
-                  metadata={metadata}
-                />
-              )
-            )}
-          </>
+        {/* TELA 4: Settings & Conexão Notion */}
+        {currentView === 'settings' && (
+          <SettingsView
+            onApiKeySaved={handleApiKeySaved}
+            onNavigateToCreateForm={() => setCurrentView('create_form')}
+          />
         )}
       </main>
     </div>

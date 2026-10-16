@@ -4,13 +4,24 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  FileCheck,
-  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  Settings,
+  Plus,
   Bookmark,
-  Clock,
+  FileText,
+  Scissors,
+  Check,
   Sparkles,
-  Video,
-  Code2,
+  History,
+  X,
+  Type,
+  Tag as TagIcon,
+  AlignLeft,
+  Link2,
+  Image as ImageIcon,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { FormConfig, ExtractedMetadata } from '../types';
 import { createPage } from '../services/notion';
@@ -22,22 +33,34 @@ interface SavePageViewProps {
   apiKey: string;
   form: FormConfig;
   metadata: ExtractedMetadata;
-  onRefreshMetadata?: () => void;
+  onBackToSelectForm: () => void;
+  onOpenSettings: () => void;
 }
 
 export const SavePageView: React.FC<SavePageViewProps> = ({
   apiKey,
   form,
   metadata,
+  onBackToSelectForm,
+  onOpenSettings,
 }) => {
   const [title, setTitle] = useState(metadata.title || '');
   const [url, setUrl] = useState(metadata.url || '');
   const [description, setDescription] = useState(metadata.description || '');
   const [coverUrl, setCoverUrl] = useState<string | undefined>(metadata.coverImage);
+  const [iconUrl, setIconUrl] = useState<string | undefined>(metadata.favicon);
   const [propertyValues, setPropertyValues] = useState<Record<string, any>>({});
 
-  // Controle de extração de artigo
-  const [clipContent, setClipContent] = useState(form.clipContent ?? true);
+  // Clip Action: 'bookmark' | 'content' | 'selection'
+  const [clipAction, setClipAction] = useState<'bookmark' | 'content' | 'selection'>(
+    form.clipContent ? 'content' : 'bookmark'
+  );
+
+  // Expansão de campos extras (Save.to: "⌄ 4 more fields")
+  const [showMoreFields, setShowMoreFields] = useState(false);
+  const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false);
+
+  // Extração de artigo
   const [articleData, setArticleData] = useState<ArticleParsedContent | null>(null);
   const [loadingArticle, setLoadingArticle] = useState(false);
 
@@ -52,11 +75,12 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     setUrl(metadata.url || '');
     setDescription(metadata.description || '');
     setCoverUrl(metadata.coverImage);
-    setClipContent(form.clipContent ?? true);
+    setIconUrl(metadata.favicon);
+    setClipAction(form.clipContent ? 'content' : 'bookmark');
     setSavedPageInfo(null);
     setError(null);
 
-    // Inicializa propriedades
+    // Inicializa valores padrão
     const initialProps: Record<string, any> = {};
     if (form.mappings) {
       for (const m of form.mappings) {
@@ -67,7 +91,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     }
     setPropertyValues(initialProps);
 
-    // Extrai o conteúdo do artigo via Readability
+    // Pré-carrega artigo
     if (form.clipContent) {
       setLoadingArticle(true);
       getActiveTabArticle()
@@ -107,10 +131,6 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
 
       if (form.destinationType === 'database' && form.mappings) {
         for (const mapping of form.mappings) {
-          if (!mapping.showInPopup && mapping.source !== 'page_title' && mapping.source !== 'page_url') {
-            continue;
-          }
-
           let val: any = null;
 
           if (mapping.source === 'page_title' || mapping.notionPropertyType === 'title') {
@@ -132,20 +152,18 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         }
       }
 
-      // Preparação dos blocos de conteúdo para o Notion
+      // Preparação dos blocos
       const contentBlocks: any[] = [];
 
-      // Caso 1: Suporte Especial para YouTube
       if (specialType === 'youtube' && url) {
         contentBlocks.push({
           object: 'block',
           type: 'video',
           video: {
             type: 'external',
-            external: { url: url },
+            external: { url },
           },
         });
-
         if (description) {
           contentBlocks.push({
             object: 'block',
@@ -155,21 +173,16 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             },
           });
         }
-      }
-      // Caso 2: Artigo Completo Extraído via Readability
-      else if (clipContent && articleData && articleData.blocks.length > 0) {
+      } else if (clipAction === 'content' && articleData && articleData.blocks.length > 0) {
         contentBlocks.push(...articleData.blocks);
-      }
-      // Caso 3: Bookmark Simples com Citação
-      else {
+      } else {
         if (url) {
           contentBlocks.push({
             object: 'block',
             type: 'bookmark',
-            bookmark: { url: url },
+            bookmark: { url },
           });
         }
-
         if (description) {
           contentBlocks.push({
             object: 'block',
@@ -190,8 +203,8 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         url: url.trim(),
         description: description.trim(),
         properties: propertiesPayload,
-        coverUrl: coverUrl,
-        iconUrl: metadata.favicon,
+        coverUrl,
+        iconUrl,
         contentBlocks: contentBlocks.length > 0 ? contentBlocks : undefined,
       });
 
@@ -203,128 +216,270 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     }
   };
 
-  const isSavingToPage = form.destinationType === 'page';
+  // Mapeamentos específicos da database
+  const tagMapping = form.mappings?.find(
+    (m) => m.notionPropertyType === 'multi_select' || m.notionPropertyType === 'select'
+  );
+
+  const customDatabaseMappings = form.mappings?.filter(
+    (m) =>
+      m.notionPropertyType !== 'title' &&
+      m.notionPropertyType !== 'url' &&
+      m.notionPropertyId !== tagMapping?.notionPropertyId &&
+      m.source !== 'page_description'
+  ) || [];
 
   return (
-    <div className="p-3.5 space-y-3.5 text-xs text-gray-800">
-      {/* Seletor Visual de Capa (com imagens da página e URL) */}
-      <CoverImagePicker
-        coverUrl={coverUrl}
-        onSelectCover={(url) => setCoverUrl(url)}
-      />
-
-      {/* Badge Informativo de Tipo de Página / Leitura */}
-      {specialType === 'youtube' ? (
-        <div className="p-2 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between text-[11px] text-red-800">
-          <div className="flex items-center gap-1.5 font-medium">
-            <Video className="w-4 h-4 text-red-600" />
-            <span>Vídeo do YouTube detectado</span>
-          </div>
-          <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">
-            Embed Player
-          </span>
-        </div>
-      ) : specialType === 'github' ? (
-        <div className="p-2 bg-gray-100 border border-gray-300 rounded-lg flex items-center justify-between text-[11px] text-gray-800">
-          <div className="flex items-center gap-1.5 font-medium">
-            <Code2 className="w-4 h-4 text-black" />
-            <span>Repositório GitHub detectado</span>
-          </div>
-          <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded font-semibold">
-            README + Stats
-          </span>
-        </div>
-      ) : (
-        /* Alternador de Modo de Salvamento: Artigo Completo vs Bookmark */
-        <div className="flex items-center justify-between p-2 bg-blue-50/60 border border-blue-100 rounded-lg">
-          <div className="flex items-center gap-1.5 text-blue-950">
-            {clipContent ? (
-              <BookOpen className="w-4 h-4 text-blue-600" />
-            ) : (
-              <Bookmark className="w-4 h-4 text-gray-500" />
-            )}
-            <div>
-              <div className="font-semibold text-[11px]">
-                {clipContent ? 'Modo Leitura (Artigo Completo)' : 'Apenas Bookmark'}
-              </div>
-              {clipContent && articleData && (
-                <div className="text-[10px] text-blue-700 flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  <span>
-                    ~{articleData.readingTimeMinutes} min ({articleData.wordCount} palavras)
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
+    <div className="flex flex-col min-h-[480px] bg-[#f8f9fa] text-xs text-gray-800">
+      {/* Top Header Estilo Save.to */}
+      <div className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100">
+        <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
+        <div className="flex items-center gap-2 text-gray-500">
           <button
             type="button"
-            onClick={() => setClipContent(!clipContent)}
-            className="text-[10px] font-medium text-blue-600 hover:text-blue-800 underline cursor-pointer"
+            title="Dicas & Atalhos"
+            className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
-            {clipContent ? 'Salvar só link' : 'Extrair texto'}
+            <Sparkles className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            title="Histórico de Páginas Salvas"
+            className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+          >
+            <History className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => window.close()}
+            title="Fechar"
+            className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
-      )}
+      </div>
 
-      {/* Formulário de salvamento */}
-      <form onSubmit={handleSave} className="space-y-3">
-        {/* Título da Página */}
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-            Título
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
-            placeholder="Título da página"
-            required
-          />
+      {/* Barra de Navegação do Formulário: [<] [🔖 Form Name] [⚙️] */}
+      <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-gray-200">
+        <button
+          type="button"
+          onClick={onBackToSelectForm}
+          title="Trocar de Formulário"
+          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-700 transition-colors cursor-pointer"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+
+        <div className="flex items-center gap-1.5 font-bold text-sm text-gray-900 truncate max-w-[240px]">
+          <span className="text-base">{form.icon || '🔖'}</span>
+          <span className="truncate">{form.name}</span>
         </div>
 
-        {/* URL */}
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-            URL
-          </label>
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="w-full px-2.5 py-1.5 border border-gray-200 bg-gray-50 text-gray-600 rounded-md text-xs truncate focus:ring-1 focus:ring-blue-500 focus:outline-none"
-            placeholder="https://..."
-          />
-        </div>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          title="Configurações do Formulário"
+          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+      </div>
 
-        {/* Descrição / Resumo */}
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-            Resumo / Descrição
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
-            placeholder="Anotações ou resumo da página..."
-          />
-        </div>
+      <form onSubmit={handleSave} className="p-3.5 space-y-3 flex-1 flex flex-col justify-between">
+        <div className="space-y-3">
+          {/* Campo 1: Name * (Aa Name *) */}
+          <div className="space-y-1">
+            <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+              <Type className="w-3.5 h-3.5 text-gray-400" />
+              <span>Name</span>
+              <span className="text-gray-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+              placeholder="ctresb/leis: Todas as leis do Brasil"
+              required
+            />
+          </div>
 
-        {/* Renderização Rica de Propriedades da Database (Cores Notion, Tags, Datepicker, Status) */}
-        {!isSavingToPage && form.mappings && (
-          <div className="space-y-2.5 pt-1 border-t border-gray-100">
-            {form.mappings
-              .filter(
-                (m) =>
-                  m.showInPopup &&
-                  m.notionPropertyType !== 'title' &&
-                  m.notionPropertyType !== 'url' &&
-                  m.source !== 'page_description'
-              )
-              .map((mapping) => (
+          {/* Campo 2: Tags (⋮≡ Tags) */}
+          {tagMapping && (
+            <PropertyField
+              mapping={tagMapping}
+              value={propertyValues[tagMapping.notionPropertyId]}
+              onChange={(val) => handlePropertyValueChange(tagMapping.notionPropertyId, val)}
+              apiKey={apiKey}
+              databaseId={form.databaseId}
+            />
+          )}
+
+          {/* Campo 3: Description (≡ Description) */}
+          <div className="space-y-1">
+            <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+              <AlignLeft className="w-3.5 h-3.5 text-gray-400" />
+              <span>Description</span>
+            </label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Empty"
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs resize-none"
+            />
+          </div>
+
+          {/* Campos Ocultos / Expandíveis (Save.to: "⌄ 4 more fields") */}
+          {showMoreFields ? (
+            <div className="space-y-3 pt-1 border-t border-gray-100 animate-fadeIn">
+              {/* Content Image (🖼️ Content Image) */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+                  <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
+                  <span>Content Image</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <div
+                    onClick={() => setIsCoverPickerOpen(true)}
+                    className="w-12 h-12 rounded-lg border border-gray-200 bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer overflow-hidden transition-colors shadow-2xs group relative"
+                  >
+                    {coverUrl ? (
+                      <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                    ) : (
+                      <Plus className="w-5 h-5 text-gray-400 group-hover:text-gray-600" />
+                    )}
+                  </div>
+                  {coverUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setCoverUrl(undefined)}
+                      className="text-[10px] text-gray-400 hover:text-red-500 underline cursor-pointer"
+                    >
+                      Remover Imagem
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Icon (🖼️ Icon) */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+                  <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
+                  <span>Icon</span>
+                </label>
+                <div className="w-10 h-10 rounded-lg bg-black flex items-center justify-center p-1.5 shadow-2xs">
+                  {iconUrl ? (
+                    <img
+                      src={iconUrl}
+                      alt="Icon"
+                      className="w-6 h-6 object-contain rounded"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <span className="text-white text-xs font-bold">N</span>
+                  )}
+                </div>
+              </div>
+
+              {/* URL * (🔗 URL *) */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+                  <Link2 className="w-3.5 h-3.5 text-gray-400" />
+                  <span>URL</span>
+                  <span className="text-gray-400">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                  placeholder="https://..."
+                />
+              </div>
+
+              {/* Clip Action (📄 Clip Action - Opções Estilo Save.to) */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
+                  <FileText className="w-3.5 h-3.5 text-gray-400" />
+                  <span>Clip Action</span>
+                </label>
+
+                <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-2xs overflow-hidden">
+                  {/* Opção 1: Bookmark */}
+                  <label
+                    onClick={() => setClipAction('bookmark')}
+                    className={`flex items-center justify-between p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
+                      clipAction === 'bookmark' ? 'bg-blue-50/40 text-blue-900 font-semibold' : 'text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Bookmark className={`w-3.5 h-3.5 ${clipAction === 'bookmark' ? 'text-blue-600' : 'text-gray-400'}`} />
+                      <span className="text-[11px]">Bookmark</span>
+                    </div>
+                    {clipAction === 'bookmark' ? (
+                      <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                        <Check className="w-2.5 h-2.5" />
+                      </div>
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border border-gray-300" />
+                    )}
+                  </label>
+
+                  {/* Opção 2: Save Webpage Content */}
+                  <label
+                    onClick={() => setClipAction('content')}
+                    className={`flex items-center justify-between p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
+                      clipAction === 'content' ? 'bg-blue-50/40 text-blue-900 font-semibold' : 'text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className={`w-3.5 h-3.5 ${clipAction === 'content' ? 'text-blue-600' : 'text-gray-400'}`} />
+                      <div>
+                        <div className="text-[11px]">Save Webpage Content</div>
+                        {articleData && (
+                          <div className="text-[10px] text-blue-600 font-normal">
+                            ~{articleData.readingTimeMinutes} min • {articleData.wordCount} palavras
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {clipAction === 'content' ? (
+                      <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                        <Check className="w-2.5 h-2.5" />
+                      </div>
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border border-gray-300" />
+                    )}
+                  </label>
+
+                  {/* Opção 3: Save custom area on webpage */}
+                  <label
+                    onClick={() => setClipAction('selection')}
+                    className={`flex items-center justify-between p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
+                      clipAction === 'selection' ? 'bg-blue-50/40 text-blue-900 font-semibold' : 'text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Scissors className={`w-3.5 h-3.5 ${clipAction === 'selection' ? 'text-blue-600' : 'text-gray-400'}`} />
+                      <span className="text-[11px]">Save custom area on webpage</span>
+                    </div>
+                    {clipAction === 'selection' ? (
+                      <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                        <Check className="w-2.5 h-2.5" />
+                      </div>
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border border-gray-300" />
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {/* Demais Propriedades Customizadas da Database */}
+              {customDatabaseMappings.map((mapping) => (
                 <PropertyField
                   key={mapping.notionPropertyId}
                   mapping={mapping}
@@ -334,12 +489,59 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                   databaseId={form.databaseId}
                 />
               ))}
+
+              {/* Botão para Ocultar os Campos Extras */}
+              <button
+                type="button"
+                onClick={() => setShowMoreFields(false)}
+                className="w-full flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-gray-800 cursor-pointer pt-1"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span>Hide 4 fields</span>
+              </button>
+            </div>
+          ) : (
+            /* Botão de Expandir Campos Extras (Save.to: "⌄ 4 more fields") */
+            <button
+              type="button"
+              onClick={() => setShowMoreFields(true)}
+              className="w-full flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-gray-800 cursor-pointer pt-1"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span>4 more fields</span>
+            </button>
+          )}
+        </div>
+
+        {/* Modal de Escolher Imagem de Capa se Aberto */}
+        {isCoverPickerOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-3 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                <span className="font-semibold text-xs text-gray-900">Selecionar Imagem</span>
+                <button
+                  type="button"
+                  onClick={() => setIsCoverPickerOpen(false)}
+                  className="p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <CoverImagePicker
+                coverUrl={coverUrl}
+                onSelectCover={(url) => {
+                  setCoverUrl(url);
+                  setIsCoverPickerOpen(false);
+                }}
+              />
+            </div>
           </div>
         )}
 
-        {/* Mensagem de Erro */}
+        {/* Feedback de Erro */}
         {error && (
-          <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-md flex items-start gap-2">
+          <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -347,14 +549,10 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
 
         {/* Feedback de Sucesso */}
         {savedPageInfo && (
-          <div className="p-3 bg-green-50 border border-green-200 text-green-800 text-xs rounded-md space-y-2">
+          <div className="p-3 bg-green-50 border border-green-200 text-green-800 text-xs rounded-lg space-y-1.5 animate-fadeIn">
             <div className="flex items-center gap-1.5 font-semibold">
               <CheckCircle2 className="w-4 h-4 text-green-600" />
-              <span>
-                {isSavingToPage && form.pageSaveMode === 'append_block'
-                  ? 'Link inserido na página com sucesso!'
-                  : 'Salvo com sucesso no Notion!'}
-              </span>
+              <span>Salvo com sucesso no Notion!</span>
             </div>
             <a
               href={savedPageInfo.url}
@@ -367,28 +565,27 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           </div>
         )}
 
-        {/* Botão de Ação Principal */}
-        <button
-          type="submit"
-          disabled={saving || loadingArticle}
-          className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-xs rounded-md shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Salvando no Notion...</span>
-            </>
-          ) : (
-            <>
-              <FileCheck className="w-3.5 h-3.5" />
-              <span>
-                {isSavingToPage && form.pageSaveMode === 'append_block'
-                  ? `Inserir em "${form.databaseTitle}"`
-                  : `Salvar em "${form.databaseTitle}"`}
-              </span>
-            </>
-          )}
-        </button>
+        {/* Botão de Ação: Save to Notion ⌵ */}
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={saving || loadingArticle}
+            className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-between cursor-pointer disabled:opacity-50"
+          >
+            <div className="w-4" />
+            <div className="flex items-center gap-1.5">
+              {saving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving to Notion...</span>
+                </>
+              ) : (
+                <span>Save to Notion</span>
+              )}
+            </div>
+            <ChevronDown className="w-4 h-4 opacity-75" />
+          </button>
+        </div>
       </form>
     </div>
   );
