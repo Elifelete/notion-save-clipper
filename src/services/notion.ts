@@ -214,6 +214,34 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
 export const fetchDatabases = fetchDestinations;
 
 /**
+ * Atualiza a lista de opções de uma propriedade Select ou Multi-Select na database do Notion
+ */
+export async function updateDatabasePropertyOptions(
+  apiKey: string,
+  databaseId: string,
+  propertyName: string,
+  propertyType: 'select' | 'multi_select',
+  options: Array<{ id?: string; name: string; color?: string }>
+): Promise<void> {
+  await notionRequest<any>(apiKey, `/databases/${databaseId}`, {
+    method: 'PATCH',
+    body: {
+      properties: {
+        [propertyName]: {
+          [propertyType]: {
+            options: options.map((opt) => ({
+              ...(opt.id ? { id: opt.id } : {}),
+              name: opt.name,
+              color: opt.color || 'default',
+            })),
+          },
+        },
+      },
+    },
+  });
+}
+
+/**
  * Obtém os detalhes e schema de uma database específica
  */
 export async function getDatabaseSchema(apiKey: string, databaseId: string): Promise<NotionDestination> {

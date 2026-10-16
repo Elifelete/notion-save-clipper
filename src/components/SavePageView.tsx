@@ -330,6 +330,8 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                   mapping={mapping}
                   value={propertyValues[mapping.notionPropertyId]}
                   onChange={(val) => handlePropertyValueChange(mapping.notionPropertyId, val)}
+                  apiKey={apiKey}
+                  databaseId={form.databaseId}
                 />
               ))}
           </div>
