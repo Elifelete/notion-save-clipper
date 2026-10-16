@@ -1,18 +1,34 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
   ChevronDown,
-  Database,
-  FileText,
+  ChevronUp,
+  ChevronRight,
+  ArrowRight,
+  Check,
+  Plus,
+  X,
   Bookmark,
+  FileText,
+  Database,
+  GripVertical,
+  MoreHorizontal,
+  Calendar,
+  User,
+  Link2,
+  Tag,
+  AlignLeft,
+  Type,
+  Image as ImageIcon,
   FolderPlus,
   ListPlus,
   Loader2,
-  Check,
-  ArrowLeft,
-  Sparkles,
+  Globe,
+  Hash,
+  ToggleLeft,
+  FileSpreadsheet,
 } from 'lucide-react';
-import type { NotionDestination, FormConfig, PropertyFieldMapping, PageSaveMode } from '../types';
+import type { NotionDestination, FormConfig, PropertyFieldMapping, PageSaveMode, PropertyDataSource } from '../types';
 import { fetchDestinations, getDatabaseSchema } from '../services/notion';
 import { saveForm } from '../services/storage';
 
@@ -22,9 +38,25 @@ interface CreateFormViewProps {
   onCancel: () => void;
 }
 
-const EMOJI_OPTIONS = ['📑', '📚', '💡', '📌', '🎬', '🍳', '💼', '🚀', '⭐', '🧠'];
+const EMOJI_OPTIONS = ['🔖', '📚', '💡', '📌', '🎬', '🍳', '💼', '🚀', '⭐', '🧠', '📄', '📝'];
 
 type FilterType = 'all' | 'database' | 'page';
+
+interface SourceOption {
+  source: PropertyDataSource;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const SOURCE_OPTIONS: SourceOption[] = [
+  { source: 'page_title', label: 'Page Title', icon: Type },
+  { source: 'page_description', label: 'Page Description', icon: AlignLeft },
+  { source: 'page_author', label: 'Author', icon: User },
+  { source: 'page_date', label: 'Publication Date', icon: Calendar },
+  { source: 'page_url', label: 'Url', icon: Link2 },
+  { source: 'page_site_name', label: 'Resource Title', icon: Globe },
+  { source: 'manual', label: 'Empty (Manual)', icon: ToggleLeft },
+];
 
 export const CreateFormView: React.FC<CreateFormViewProps> = ({
   apiKey,
@@ -35,24 +67,37 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Estado da navegação interna: 'select_location' -> 'configure_form'
-  const [step, setStep] = useState<'select_location' | 'configure_form'>('select_location');
+  // Navegação: 'configure_form' é a tela principal (estilo Save.to), 'select_location' é o seletor
+  const [step, setStep] = useState<'configure_form' | 'select_location'>('configure_form');
 
-  // Busca e Filtros
+  // Busca e Filtros para Seleção de Local
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
 
   // Destino selecionado
   const [selectedDestination, setSelectedDestination] = useState<NotionDestination | null>(null);
+  const [databaseProperties, setDatabaseProperties] = useState<Record<string, any>>({});
 
-  // Configuração do formulário
-  const [formName, setFormName] = useState('Salvar Artigo');
-  const [formIcon, setFormIcon] = useState('📑');
+  // Configurações do Formulário (Save.to)
+  const [formName, setFormName] = useState('Save Links');
+  const [formIcon, setFormIcon] = useState('🔖');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [detectExisting, setDetectExisting] = useState(false);
+  const [clipAction, setClipAction] = useState<'bookmark' | 'article'>('bookmark');
   const [pageSaveMode, setPageSaveMode] = useState<PageSaveMode>('subpage');
-  const [clipContent, setClipContent] = useState(true);
+
+  // Campos Mapeados e Controle de Expansão
   const [mappings, setMappings] = useState<PropertyFieldMapping[]>([]);
+  const [showAllFields, setShowAllFields] = useState(false);
+  const [activeSourceMenuId, setActiveSourceMenuId] = useState<string | null>(null);
+
+  // Dropdown "+ Add New Field"
+  const [isAddFieldOpen, setIsAddFieldOpen] = useState(false);
+  const [propertySearchQuery, setPropertySearchQuery] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
 
+  // Carrega destinos do Notion
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -60,6 +105,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
       try {
         const list = await fetchDestinations(apiKey);
         setDestinations(list);
+
+        // Pré-seleciona a primeira database encontrada ou primeiro item
+        if (list.length > 0) {
+          const firstDb = list.find((d) => d.type === 'database') || list[0]!;
+          await handleChooseDestination(firstDb);
+        }
       } catch (err: any) {
         setError(err.message || 'Falha ao buscar páginas e databases no Notion.');
       } finally {
@@ -69,37 +120,15 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     loadData();
   }, [apiKey]);
 
-  // Filtra itens com base na pesquisa e no seletor Viewing
-  const filteredDestinations = useMemo(() => {
-    return destinations.filter((item) => {
-      const matchesSearch =
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.path && item.path.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      if (!matchesSearch) return false;
-
-      if (filterType === 'database') return item.type === 'database';
-      if (filterType === 'page') return item.type === 'page';
-      return true;
-    });
-  }, [destinations, searchQuery, filterType]);
-
-  const databaseItems = useMemo(
-    () => filteredDestinations.filter((d) => d.type === 'database'),
-    [filteredDestinations]
-  );
-  const pageItems = useMemo(
-    () => filteredDestinations.filter((d) => d.type === 'page'),
-    [filteredDestinations]
-  );
-
-  const handleSelectLocation = async (dest: NotionDestination) => {
+  const handleChooseDestination = async (dest: NotionDestination) => {
     setSelectedDestination(dest);
-    setFormName(dest.title !== 'Base de Dados sem nome' && dest.title !== 'Página sem nome' ? dest.title : 'Salvar no Notion');
+    setFormName(dest.title !== 'Base de Dados sem nome' && dest.title !== 'Página sem nome' ? `Salvar em ${dest.title}` : 'Save Links');
 
     if (dest.type === 'database') {
       try {
         const fullDb = await getDatabaseSchema(apiKey, dest.id);
+        setDatabaseProperties(fullDb.properties || {});
+
         const initialMappings: PropertyFieldMapping[] = [];
 
         if (fullDb.properties) {
@@ -115,6 +144,15 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 showInPopup: true,
                 required: true,
               });
+            } else if (prop.type === 'multi_select' || prop.type === 'select') {
+              initialMappings.push({
+                notionPropertyId: prop.id,
+                notionPropertyName: propName,
+                notionPropertyType: prop.type,
+                source: 'manual',
+                options: propOptions,
+                showInPopup: true,
+              });
             } else if (prop.type === 'url') {
               initialMappings.push({
                 notionPropertyId: prop.id,
@@ -127,8 +165,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               prop.type === 'rich_text' &&
               (propName.toLowerCase().includes('desc') ||
                 propName.toLowerCase().includes('resumo') ||
-                propName.toLowerCase().includes('summary') ||
-                propName.toLowerCase().includes('nota'))
+                propName.toLowerCase().includes('note'))
             ) {
               initialMappings.push({
                 notionPropertyId: prop.id,
@@ -137,37 +174,62 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 source: 'page_description',
                 showInPopup: true,
               });
-            } else {
-              initialMappings.push({
-                notionPropertyId: prop.id,
-                notionPropertyName: propName,
-                notionPropertyType: prop.type,
-                source: 'manual',
-                options: propOptions,
-                showInPopup: true, // Habilitado para facilitar tags, status, checkboxes
-              });
             }
           }
         }
         setMappings(initialMappings);
       } catch (e: any) {
-        console.error('Erro ao buscar schema da database:', e);
+        console.error('Erro ao carregar schema da database:', e);
       }
     } else {
+      setDatabaseProperties({});
       setMappings([]);
     }
+  };
 
+  const handleSelectLocation = async (dest: NotionDestination) => {
+    await handleChooseDestination(dest);
     setStep('configure_form');
   };
 
-  const handleToggleProperty = (propId: string) => {
+  // Remove um campo do formulário
+  const handleRemoveField = (propId: string) => {
+    setMappings((prev) => prev.filter((m) => m.notionPropertyId !== propId));
+  };
+
+  // Adiciona um campo de database ao formulário
+  const handleAddFieldFromDatabase = (propName: string, prop: any) => {
+    const propOptions = prop.select?.options || prop.multi_select?.options || prop.status?.options;
+    const defaultSource: PropertyDataSource =
+      prop.type === 'title'
+        ? 'page_title'
+        : prop.type === 'url'
+        ? 'page_url'
+        : prop.name.toLowerCase().includes('desc')
+        ? 'page_description'
+        : 'manual';
+
+    const newMapping: PropertyFieldMapping = {
+      notionPropertyId: prop.id,
+      notionPropertyName: propName,
+      notionPropertyType: prop.type,
+      source: defaultSource,
+      options: propOptions,
+      showInPopup: true,
+      required: prop.type === 'title',
+    };
+
+    setMappings((prev) => [...prev, newMapping]);
+    setIsAddFieldOpen(false);
+    setPropertySearchQuery('');
+  };
+
+  // Altera a fonte de dados (Source) de um campo
+  const handleSelectSource = (propId: string, source: PropertyDataSource) => {
     setMappings((prev) =>
-      prev.map((m) =>
-        m.notionPropertyId === propId
-          ? { ...m, showInPopup: !m.showInPopup }
-          : m
-      )
+      prev.map((m) => (m.notionPropertyId === propId ? { ...m, source } : m))
     );
+    setActiveSourceMenuId(null);
   };
 
   const handleSaveForm = async (e: React.FormEvent) => {
@@ -178,13 +240,13 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     try {
       const newForm: FormConfig = {
         id: crypto.randomUUID(),
-        name: formName.trim() || 'Novo Formulário',
+        name: formName.trim() || 'Save Links',
         icon: formIcon,
         destinationType: selectedDestination.type,
         databaseId: selectedDestination.id,
         databaseTitle: selectedDestination.title,
         pageSaveMode: selectedDestination.type === 'page' ? pageSaveMode : undefined,
-        clipContent,
+        clipContent: clipAction === 'article',
         mappings,
         createdAt: Date.now(),
       };
@@ -198,11 +260,48 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     }
   };
 
+  // Ícone por tipo de propriedade Notion
+  const renderPropertyIcon = (propType: string) => {
+    switch (propType) {
+      case 'title':
+        return <Type className="w-3.5 h-3.5 text-gray-500" />;
+      case 'multi_select':
+      case 'select':
+        return <Tag className="w-3.5 h-3.5 text-blue-500" />;
+      case 'url':
+        return <Link2 className="w-3.5 h-3.5 text-purple-500" />;
+      case 'rich_text':
+        return <AlignLeft className="w-3.5 h-3.5 text-emerald-500" />;
+      case 'date':
+        return <Calendar className="w-3.5 h-3.5 text-amber-500" />;
+      case 'number':
+        return <Hash className="w-3.5 h-3.5 text-gray-500" />;
+      case 'files':
+        return <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />;
+      default:
+        return <FileSpreadsheet className="w-3.5 h-3.5 text-gray-400" />;
+    }
+  };
+
+  // Ícone por tipo de Source
+  const renderSourceIcon = (source: PropertyDataSource) => {
+    const opt = SOURCE_OPTIONS.find((s) => s.source === source);
+    if (!opt) return <FileText className="w-3 h-3 text-gray-400" />;
+    const IconComponent = opt.icon;
+    return <IconComponent className="w-3 h-3 text-gray-500" />;
+  };
+
+  // Label amigável do Source
+  const getSourceLabel = (source: PropertyDataSource) => {
+    const opt = SOURCE_OPTIONS.find((s) => s.source === source);
+    return opt?.label || 'Manual';
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-12 space-y-2 text-gray-500">
         <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-        <p className="text-xs">Buscando databases e páginas do seu Notion...</p>
+        <p className="text-xs">Carregando dados do seu Notion...</p>
       </div>
     );
   }
@@ -228,25 +327,36 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     );
   }
 
-  // TELA 1: Select a Save Location (Idêntica ao Save.to)
+  // TELA SECUNDÁRIA: Select a Save Location
   if (step === 'select_location') {
+    const filteredDestinations = destinations.filter((item) => {
+      const matchesSearch =
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.path && item.path.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      if (!matchesSearch) return false;
+      if (filterType === 'database') return item.type === 'database';
+      if (filterType === 'page') return item.type === 'page';
+      return true;
+    });
+
+    const databaseItems = filteredDestinations.filter((d) => d.type === 'database');
+    const pageItems = filteredDestinations.filter((d) => d.type === 'page');
+
     return (
-      <div className="p-3.5 space-y-3 text-xs text-gray-800">
-        {/* Header com navegação e título */}
-        <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+      <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f9fafb] min-h-[460px]">
+        {/* Header com navegação */}
+        <div className="flex items-center justify-between pb-2 border-b border-gray-200">
           <button
-            onClick={onCancel}
-            className="flex items-center gap-1 text-gray-500 hover:text-black font-medium transition-colors cursor-pointer"
+            onClick={() => setStep('configure_form')}
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Voltar</span>
+            <ChevronDown className="w-4 h-4 rotate-90" />
           </button>
-          <div className="text-center font-semibold text-sm text-gray-900">
+          <div className="font-semibold text-sm text-gray-900">
             Select a Save Location
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <span>Notion</span>
-          </div>
+          <div className="w-7" />
         </div>
 
         {/* Barra de Busca */}
@@ -257,11 +367,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search databases and pages..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            autoFocus
           />
         </div>
 
-        {/* Filtro: Viewing Databases & Pages */}
+        {/* Filtro: Viewing */}
         <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
           <span>Viewing</span>
           <div className="relative">
@@ -279,14 +390,13 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         </div>
 
         {/* Lista de Resultados */}
-        <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
           {filteredDestinations.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-xs">
               Nenhuma base ou página encontrada para "{searchQuery}".
             </div>
           ) : (
             <>
-              {/* Grupo Databases */}
               {databaseItems.length > 0 && (
                 <div className="space-y-1">
                   <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1">
@@ -298,9 +408,9 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                         key={db.id}
                         type="button"
                         onClick={() => handleSelectLocation(db)}
-                        className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-all text-left cursor-pointer group"
+                        className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left cursor-pointer group"
                       >
-                        <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-white transition-colors">
+                        <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
                           {db.icon || '📁'}
                         </span>
                         <div className="truncate flex-1">
@@ -317,7 +427,6 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 </div>
               )}
 
-              {/* Grupo Pages */}
               {pageItems.length > 0 && (
                 <div className="space-y-1 pt-1">
                   <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1">
@@ -329,9 +438,9 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                         key={pg.id}
                         type="button"
                         onClick={() => handleSelectLocation(pg)}
-                        className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-all text-left cursor-pointer group"
+                        className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left cursor-pointer group"
                       >
-                        <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-white transition-colors">
+                        <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
                           {pg.icon || '📄'}
                         </span>
                         <div className="truncate flex-1">
@@ -354,217 +463,381 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     );
   }
 
-  // TELA 2: Configure Form (Ajuste de Nome, Ícone, Propriedades e Modo de Salvamento)
+  // TELA PRINCIPAL: Create Form (Design Idêntico ao Save.to)
+  const visibleFields = showAllFields ? mappings : mappings.slice(0, 2);
+  const hiddenFieldsCount = Math.max(0, mappings.length - 2);
+
+  // Lista de propriedades da Database que ainda NÃO foram adicionadas aos Fields
+  const availableDatabaseProperties = Object.entries(databaseProperties).filter(
+    ([_, prop]: any) => !mappings.some((m) => m.notionPropertyId === prop.id)
+  );
+
   return (
-    <form onSubmit={handleSaveForm} className="p-4 space-y-3.5 text-xs text-gray-800">
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <button
-            type="button"
-            onClick={() => setStep('select_location')}
-            className="flex items-center gap-1 text-[11px] text-blue-600 hover:underline font-medium cursor-pointer"
-          >
-            ← Trocar Local
-          </button>
-          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
-            Passo 2 de 2
-          </span>
-        </div>
-        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-blue-600" />
-          Configurar Formulário
-        </h2>
-      </div>
-
-      {/* Cartão do Destino Escolhido */}
-      {selectedDestination && (
-        <div
-          onClick={() => setStep('select_location')}
-          className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
-        >
-          <div className="flex items-center gap-2 truncate">
-            <span className="text-base">{selectedDestination.icon || '📁'}</span>
-            <div className="truncate">
-              <div className="font-semibold text-gray-900 text-xs truncate">
-                {selectedDestination.title}
-              </div>
-              <div className="text-[10px] text-gray-500 truncate">
-                {selectedDestination.path} • {selectedDestination.type === 'database' ? 'Database' : 'Página'}
-              </div>
-            </div>
-          </div>
-          <span className="text-[11px] text-blue-600 font-medium shrink-0 ml-2">
-            Alterar
-          </span>
-        </div>
-      )}
-
-      {/* Se o destino for uma PÁGINA, escolha entre Sub-página ou Inserir no final */}
-      {selectedDestination?.type === 'page' && (
-        <div className="bg-blue-50/60 border border-blue-200 rounded-md p-2.5 space-y-2">
-          <label className="block font-semibold text-blue-900 text-[11px]">
-            Como salvar nesta Página?
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setPageSaveMode('subpage')}
-              className={`p-2 rounded-md border text-left flex items-start gap-1.5 cursor-pointer transition-colors ${
-                pageSaveMode === 'subpage'
-                  ? 'border-blue-600 bg-white shadow-xs text-blue-950 font-medium'
-                  : 'border-blue-200/60 bg-white/50 text-gray-600 hover:bg-white'
-              }`}
-            >
-              <FolderPlus className={`w-4 h-4 shrink-0 mt-0.5 ${pageSaveMode === 'subpage' ? 'text-blue-600' : 'text-gray-400'}`} />
-              <div>
-                <div className="text-[11px] font-semibold">Sub-página</div>
-                <div className="text-[10px] text-gray-500">Cria página filha com capa e conteúdo</div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setPageSaveMode('append_block')}
-              className={`p-2 rounded-md border text-left flex items-start gap-1.5 cursor-pointer transition-colors ${
-                pageSaveMode === 'append_block'
-                  ? 'border-blue-600 bg-white shadow-xs text-blue-950 font-medium'
-                  : 'border-blue-200/60 bg-white/50 text-gray-600 hover:bg-white'
-              }`}
-            >
-              <ListPlus className={`w-4 h-4 shrink-0 mt-0.5 ${pageSaveMode === 'append_block' ? 'text-blue-600' : 'text-gray-400'}`} />
-              <div>
-                <div className="text-[11px] font-semibold">No final da página</div>
-                <div className="text-[10px] text-gray-500">Insere o link e resumo no texto atual</div>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Nome e Ícone do Form */}
-      <div className="grid grid-cols-4 gap-2">
-        <div className="col-span-3">
-          <label className="block font-medium text-gray-700 mb-1">Nome do Formulário</label>
-          <input
-            type="text"
-            value={formName}
-            onChange={(e) => setFormName(e.target.value)}
-            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
-            placeholder="Ex: Artigos a Ler"
-          />
-        </div>
-        <div>
-          <label className="block font-medium text-gray-700 mb-1">Ícone</label>
-          <select
-            value={formIcon}
-            onChange={(e) => setFormIcon(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded-md bg-white text-base text-center focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer"
-          >
-            {EMOJI_OPTIONS.map((emoji) => (
-              <option key={emoji} value={emoji}>
-                {emoji}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Modo de Salvamento: Clip Content vs Bookmark */}
-      <div>
-        <label className="block font-medium text-gray-700 mb-1">Extração de Conteúdo</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setClipContent(true)}
-            className={`p-2 rounded-md border text-left flex items-start gap-2 cursor-pointer transition-colors ${
-              clipContent
-                ? 'border-blue-600 bg-blue-50/50 text-blue-900'
-                : 'border-gray-200 hover:bg-gray-50 text-gray-600'
-            }`}
-          >
-            <FileText className={`w-4 h-4 shrink-0 mt-0.5 ${clipContent ? 'text-blue-600' : 'text-gray-400'}`} />
-            <div>
-              <div className="font-semibold text-[11px]">Extrair Artigo</div>
-              <div className="text-[10px] opacity-75">Salva resumo e corpo da página</div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setClipContent(false)}
-            className={`p-2 rounded-md border text-left flex items-start gap-2 cursor-pointer transition-colors ${
-              !clipContent
-                ? 'border-blue-600 bg-blue-50/50 text-blue-900'
-                : 'border-gray-200 hover:bg-gray-50 text-gray-600'
-            }`}
-          >
-            <Bookmark className={`w-4 h-4 shrink-0 mt-0.5 ${!clipContent ? 'text-blue-600' : 'text-gray-400'}`} />
-            <div>
-              <div className="font-semibold text-[11px]">Apenas Bookmark</div>
-              <div className="text-[10px] opacity-75">Salva apenas link e metadados</div>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Seleção de Propriedades Visíveis no Popup (apenas para Database) */}
-      {selectedDestination?.type === 'database' ? (
-        <div>
-          <label className="block font-medium text-gray-700 mb-1">
-            Propriedades da Database para Exibir no Popup
-          </label>
-          <div className="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-36 overflow-y-auto bg-gray-50">
-            {mappings.map((mapping) => (
-              <label
-                key={mapping.notionPropertyId}
-                className="flex items-center justify-between p-2 hover:bg-white cursor-pointer text-[11px]"
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <input
-                    type="checkbox"
-                    checked={mapping.showInPopup}
-                    disabled={mapping.required}
-                    onChange={() => handleToggleProperty(mapping.notionPropertyId)}
-                    className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
-                  />
-                  <span className="font-medium text-gray-800 truncate">
-                    {mapping.notionPropertyName}
-                  </span>
-                  <span className="text-[10px] text-gray-400 bg-gray-200/60 px-1.5 py-0.5 rounded">
-                    {mapping.notionPropertyType}
-                  </span>
-                </div>
-                {mapping.required && (
-                  <span className="text-[10px] text-amber-600 font-semibold">Obrigatório</span>
-                )}
-              </label>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-md text-[11px] text-gray-500">
-          💡 <b>Destino em Página:</b> Salvará com fidelidade o <b>Título</b>, a <b>URL</b>, a <b>Imagem de Capa</b> e o <b>Conteúdo</b>!
-        </div>
-      )}
-
-      {/* Ações */}
-      <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+    <div className="p-3.5 space-y-3.5 text-xs text-gray-800 bg-[#f8f9fa] min-h-[480px]">
+      {/* Header Estilo Save.to */}
+      <div className="flex items-center justify-between pb-1">
         <button
           type="button"
-          onClick={() => setStep('select_location')}
-          className="flex-1 py-1.5 px-3 border border-gray-300 rounded-md font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
+          onClick={onCancel}
+          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
         >
-          Voltar
+          <ChevronDown className="w-4 h-4" />
         </button>
+        <h1 className="font-bold text-sm text-gray-900 tracking-tight">Create Form</h1>
         <button
-          type="submit"
-          disabled={submitting}
-          className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md shadow-xs disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
+          type="button"
+          onClick={() => {}}
+          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
         >
-          {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          Salvar Formulário
+          <MoreHorizontal className="w-4 h-4" />
         </button>
       </div>
-    </form>
+
+      <form onSubmit={handleSaveForm} className="space-y-3">
+        {/* SEÇÃO 1: Form Config */}
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-bold text-gray-500 tracking-wide uppercase px-0.5">
+            Form Config
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200/90 shadow-2xs p-3 space-y-3">
+            {/* Linha 1: Ícone + Título do Form */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="w-10 h-10 rounded-lg border border-red-100 bg-red-50 flex items-center justify-center text-xl hover:bg-red-100/80 transition-colors cursor-pointer shadow-2xs"
+                >
+                  {formIcon}
+                </button>
+                {showEmojiPicker && (
+                  <div className="absolute top-12 left-0 z-50 bg-white border border-gray-200 rounded-lg shadow-xl p-2 grid grid-cols-4 gap-1.5 w-40">
+                    {EMOJI_OPTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => {
+                          setFormIcon(emoji);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded text-base cursor-pointer"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="Save Links"
+                className="flex-1 px-3 py-2 bg-gray-50/70 border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Linha 2: Save Location */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="font-semibold text-gray-700 text-xs">Save Location</span>
+              <button
+                type="button"
+                onClick={() => setStep('select_location')}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-medium text-[11px] transition-colors cursor-pointer max-w-[200px]"
+              >
+                <span className="text-xs">{selectedDestination?.icon || '📁'}</span>
+                <span className="truncate">{selectedDestination?.title || 'Selecionar local'}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              </button>
+            </div>
+
+            {/* Se o local for uma página comum: Escolha Sub-página vs Append */}
+            {selectedDestination?.type === 'page' && (
+              <div className="p-2 bg-blue-50/50 border border-blue-100 rounded-lg flex items-center justify-between text-[11px]">
+                <span className="font-medium text-blue-900">Salvar como:</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPageSaveMode('subpage')}
+                    className={`px-2 py-0.5 rounded font-medium cursor-pointer ${
+                      pageSaveMode === 'subpage' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
+                    }`}
+                  >
+                    Sub-página
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPageSaveMode('append_block')}
+                    className={`px-2 py-0.5 rounded font-medium cursor-pointer ${
+                      pageSaveMode === 'append_block' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
+                    }`}
+                  >
+                    No final
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Linha 3: Detect existing pages */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="font-semibold text-gray-700 text-xs">Detect existing pages</span>
+              <button
+                type="button"
+                onClick={() => setDetectExisting(!detectExisting)}
+                className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                  detectExisting ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${
+                    detectExisting ? 'left-4.5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Linha 4: Clip Action */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-1 font-semibold text-gray-700 text-xs">
+                <span>Clip Action</span>
+                <span className="text-[10px] text-gray-400">ⓘ</span>
+              </div>
+
+              {/* Segmented Pill Control */}
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200/80">
+                <button
+                  type="button"
+                  onClick={() => setClipAction('bookmark')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+                    clipAction === 'bookmark'
+                      ? 'bg-white text-gray-900 shadow-2xs'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Bookmark
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClipAction('article')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+                    clipAction === 'article'
+                      ? 'bg-white text-gray-900 shadow-2xs'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Save Webpage
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SEÇÃO 2: Fields */}
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-bold text-gray-500 tracking-wide uppercase px-0.5">
+            Fields
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200/90 shadow-2xs overflow-hidden">
+            {/* Lista de Campos Mapeados */}
+            <div className="divide-y divide-gray-100">
+              {visibleFields.length === 0 ? (
+                <div className="p-3 text-center text-gray-400 text-xs">
+                  Nenhum campo adicionado. Clique abaixo para adicionar propriedades.
+                </div>
+              ) : (
+                visibleFields.map((mapping) => (
+                  <div
+                    key={mapping.notionPropertyId}
+                    className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50/70 transition-colors"
+                  >
+                    {/* Lado Esquerdo: Grip + Tipo + Nome da Propriedade */}
+                    <div className="flex items-center gap-2 truncate">
+                      <GripVertical className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                      <div className="shrink-0">{renderPropertyIcon(mapping.notionPropertyType)}</div>
+                      <span className="font-semibold text-xs text-gray-800 truncate">
+                        {mapping.notionPropertyName}
+                        {mapping.required && <span className="text-gray-400 ml-0.5">*</span>}
+                      </span>
+                    </div>
+
+                    {/* Lado Direito: Seta + Source Pill */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-gray-300 text-xs">→</span>
+
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveSourceMenuId(
+                              activeSourceMenuId === mapping.notionPropertyId
+                                ? null
+                                : mapping.notionPropertyId
+                            )
+                          }
+                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors cursor-pointer"
+                        >
+                          {renderSourceIcon(mapping.source)}
+                          <span>{getSourceLabel(mapping.source)}</span>
+                          {!mapping.required && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveField(mapping.notionPropertyId);
+                              }}
+                              className="text-gray-400 hover:text-red-500 ml-0.5 cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Menu de Seleção de Fonte (Estilo Save.to Image 5) */}
+                        {activeSourceMenuId === mapping.notionPropertyId && (
+                          <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 w-48 space-y-0.5 text-xs">
+                            <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                              Escolher Fonte
+                            </div>
+                            {SOURCE_OPTIONS.map((opt) => {
+                              const isSelected = mapping.source === opt.source;
+                              const Icon = opt.icon;
+                              return (
+                                <button
+                                  key={opt.source}
+                                  type="button"
+                                  onClick={() => handleSelectSource(mapping.notionPropertyId, opt.source)}
+                                  className="w-full flex items-center justify-between px-2.5 py-1.5 text-left hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Icon className="w-3.5 h-3.5 text-gray-500" />
+                                    <span className="text-xs text-gray-800">{opt.label}</span>
+                                  </div>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Botão + Add New Field */}
+            <div className="border-t border-gray-100 p-2 relative">
+              <button
+                type="button"
+                onClick={() => setIsAddFieldOpen(!isAddFieldOpen)}
+                className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50 text-xs font-semibold cursor-pointer transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 text-gray-500" />
+                <span>Add New Field</span>
+              </button>
+
+              {/* Dropdown Menu "+ Add New Field" (Estilo Save.to Imagens 3 e 4) */}
+              {isAddFieldOpen && (
+                <div className="absolute left-2 right-2 bottom-10 z-50 bg-white border border-gray-200 rounded-xl shadow-2xl p-2 space-y-2 max-h-64 overflow-y-auto">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={propertySearchQuery}
+                      onChange={(e) => setPropertySearchQuery(e.target.value)}
+                      placeholder="Search for a property..."
+                      className="w-full pl-8 pr-2 py-1 border border-gray-200 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Propriedades da Database */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1">
+                      Database Properties
+                    </div>
+
+                    <div className="space-y-0.5">
+                      {Object.entries(databaseProperties)
+                        .filter(([name]) =>
+                          name.toLowerCase().includes(propertySearchQuery.toLowerCase())
+                        )
+                        .map(([propName, prop]: any) => {
+                          const isAlreadyAdded = mappings.some(
+                            (m) => m.notionPropertyId === prop.id
+                          );
+
+                          return (
+                            <button
+                              key={prop.id}
+                              type="button"
+                              disabled={isAlreadyAdded}
+                              onClick={() => handleAddFieldFromDatabase(propName, prop)}
+                              className={`w-full flex items-center justify-between p-1.5 rounded-md text-xs text-left cursor-pointer transition-colors ${
+                                isAlreadyAdded
+                                  ? 'opacity-40 cursor-not-allowed bg-transparent'
+                                  : 'hover:bg-blue-50 text-gray-800'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                {renderPropertyIcon(prop.type)}
+                                <span className="font-medium truncate">{propName}</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400">
+                                {isAlreadyAdded ? 'Already Added' : `+ Adicionar`}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Botão de Expandir / Recolher Campos Extras (Ex: ⌄ 3 more fields) */}
+              {hiddenFieldsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllFields(!showAllFields)}
+                  className="w-full flex items-center gap-1.5 px-2 py-1 text-gray-500 hover:text-gray-800 text-[11px] font-medium cursor-pointer transition-colors"
+                >
+                  {showAllFields ? (
+                    <>
+                      <ChevronUp className="w-3.5 h-3.5" />
+                      <span>Hide {hiddenFieldsCount} fields</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                      <span>{hiddenFieldsCount} more fields</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Botão Principal: Save Form */}
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Saving Form...</span>
+              </>
+            ) : (
+              <span>Save Form</span>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 };
