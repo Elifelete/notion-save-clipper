@@ -43,11 +43,13 @@ Extensão de navegador moderna, rápida e local-first para salvar páginas, arti
 ## 🔑 Como Conectar ao seu Notion (100% Gratuito)
 
 1. Acesse **[notion.so/my-integrations](https://www.notion.so/my-integrations)**.
-2. Clique em **"Nova Integração"** (New Integration), dê o nome de `Save to Notion` e confirme.
-3. Copie o **"Internal Integration Secret"** (`secret_...`).
-4. Abra a extensão no navegador, cole o token nas configurações e clique em **Salvar & Validar**.
-5. **No Notion:** Abra a Database onde deseja salvar itens, clique nos três pontinhos `(...)` no canto superior direito > **Conexões** > Adicione a sua integração.
-6. Volte à extensão e crie o seu primeiro formulário!
+2. Clique no botão **"New connection"** (ou "Nova Conexão").
+3. Preencha o **Connection name** (ex: `Save to Notion`).
+4. Em **Authentication method**, selecione **"API token"** (a primeira opção) e clique em **"Create connection"**.
+5. Copie o **"Internal Integration Secret"** gerado (começa com `secret_...`).
+6. Abra o popup da extensão, cole o token nas configurações e clique em **"Salvar & Validar Conexão"**.
+7. **No Notion:** Abra a Database onde você deseja salvar itens > clique nos três pontinhos `(...)` no canto superior direito da página > **Conexões** > adicione a sua conexão recém-criada (`Save to Notion`).
+8. Volte à extensão e crie o seu primeiro formulário!
 
 ---
 

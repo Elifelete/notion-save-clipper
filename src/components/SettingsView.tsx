@@ -74,7 +74,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="p-4 space-y-5 text-gray-800">
+    <div className="p-4 space-y-4 text-gray-800">
       <div>
         <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
           <Key className="w-4 h-4 text-blue-600" />
@@ -125,13 +125,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </form>
 
-      {/* Instruções passo a passo */}
+      {/* Instruções passo a passo atualizadas com o novo modal do Notion */}
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-[11px] text-gray-600 space-y-1.5">
         <div className="font-semibold text-gray-800 flex items-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
           Como obter seu token (100% Gratuito):
         </div>
-        <ol className="list-decimal list-inside space-y-1 text-gray-600 pl-0.5">
+        <ol className="list-decimal list-inside space-y-1.5 text-gray-600 pl-0.5 leading-relaxed">
           <li>
             Acesse{' '}
             <a
@@ -143,10 +143,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               notion.so/my-integrations <ExternalLink className="w-2.5 h-2.5" />
             </a>
           </li>
-          <li>Clique em <b>"Nova Integração"</b> e dê um nome (ex: "Save to Notion").</li>
-          <li>Copie o <b>"Internal Integration Secret"</b> e cole acima.</li>
           <li>
-            <b>Importante:</b> No Notion, abra a(s) base(s) de dados que deseja salvar, clique nos três pontinhos <b>(...)</b> no topo &gt; <b>Conexões</b> &gt; adicione a sua integração.
+            Clique em <b>"New connection"</b> (ou "Nova Conexão") e dê um nome (ex: <i>Save to Notion</i>).
+          </li>
+          <li>
+            Em <b>"Authentication method"</b>, escolha <b>"API token"</b> (primeira opção) e clique no botão azul <b>"Create connection"</b>.
+          </li>
+          <li>
+            Copie o código gerado em <b>"Internal Integration Secret"</b> (começa com <code className="bg-gray-200 px-1 py-0.5 rounded text-[10px] text-gray-800">secret_...</code>) e cole no campo acima.
+          </li>
+          <li>
+            <b>Importante:</b> No Notion, abra a(s) base(s) de dados que deseja salvar &gt; clique nos três pontinhos <b>(...)</b> no topo &gt; <b>Conexões</b> (ou <i>Connections</i>) &gt; adicione a sua integração.
           </li>
         </ol>
       </div>
