@@ -5,6 +5,7 @@ export interface NotionDestination {
   title: string;
   icon?: string;
   type: NotionDestinationType;
+  path?: string; // Ex: "My Life / ... / Projects" ou "Workspace"
   properties?: Record<string, NotionPropertySchema>;
 }
 

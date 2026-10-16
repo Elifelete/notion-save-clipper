@@ -12,6 +12,7 @@ O **Notion Save** é uma extensão de navegador (Chrome, Edge, Firefox, Brave) i
   - **100% Gratuito e Ilimitado**: Número ilimitado de formulários e mapeamentos.
   - **Privacidade & Segurança Local-First**: Comunicação direta entre o navegador do usuário e a API oficial do Notion através de token próprio (*Internal Integration Token*), sem backend intermediário rastreando dados.
   - **Suporte a Databases e Páginas**: Permite salvar registros em Databases relacionais ou diretamente em Páginas comuns (como sub-páginas ou blocos de anotação no final do documento).
+  - **Seletor Visual de Destinos (Estilo Save.to)**: Busca rápida com filtro, visualização em árvore/breadcrumbs hierárquicos e suporte a múltiplos workspaces.
 
 ---
 
@@ -48,7 +49,13 @@ graph TD
     - **Base de Dados (Database)**: Cria uma nova linha/registro estruturado com mapeamento de colunas.
     - **Página Comum (Page)**: Cria uma **Sub-página** ou anexa blocos no final da página existente (**Append block**).
   - Modo de extração: *Extrair Artigo Completo* (corpo da página) ou *Apenas Bookmark/Metadados*.
-- **Mapeamento de Propriedades (Databases)**:
+- **Seletor Visual de Destinos (Select a Save Location - Estilo Save.to)**:
+  - Campo de busca em tempo real com filtro por nome da base/página.
+  - Seletor de visualização: *Databases & Pages*, *Only Databases*, *Only Pages*.
+  - Exibição de breadcrumbs com a hierarquia das pastas (`Workspace / Pasta Mãe / ... / Nome`).
+  - Navegação fluida para selecionar o destino do formulário.
+
+### 5.2 Mapeamento de Propriedades (Databases)
   - Para cada propriedade da database selecionada no Notion:
     1. **Extraído Automaticamente da Página**:
        - Título (`document.title` ou `og:title`)
@@ -64,7 +71,7 @@ graph TD
     3. **Preenchimento Manual Obrigatório/Opcional**:
        - Exibe o campo no popup para o usuário selecionar na hora (ex: prioridade, tags adicionais, anotação).
 
-### 5.2 Interface do Popup (Extensão)
+### 5.3 Interface do Popup (Extensão)
 - **Tela 1: Seletor de Formulários**:
   - Lista os formulários criados com ícones correspondentes.
   - Alternância imediata entre diferentes destinos no Notion.
@@ -80,7 +87,7 @@ graph TD
     - **Status**: Seletor de status com agrupamento (To Do, In Progress, Complete).
   - Botão principal: **"Salvar no Notion"** (com feedback de loading e sucesso com link direto para abrir no Notion).
 
-### 5.3 Extrator Inteligente de Conteúdo (Reader Mode & Metadados)
+### 5.4 Extrator Inteligente de Conteúdo (Reader Mode & Metadados)
 - Utilização de `@mozilla/readability` para remover anúncios, sidebars, modais de cookie e capturar apenas o texto limpo do artigo.
 - Conversão limpa de elementos HTML para os blocos nativos do Notion:
   - Títulos `h1`, `h2`, `h3` -> `heading_1`, `heading_2`, `heading_3`
@@ -90,18 +97,21 @@ graph TD
   - Blocos de código `pre code` -> `code`
   - Imagens `img` -> `image` (external url)
 
-### 5.4 Marcador de Texto (Highlighter)
+### 5.5 Marcador de Texto (Highlighter)
 - Selecionar texto na página e clicar com o botão direito ou num floating tooltip para salvar o trecho destacado como citação na página do Notion.
 
-### 5.5 Capturador de Imagens & Screenshots
+### 5.6 Capturador de Imagens & Screenshots
 - **Seletor de Capa**: Destaca todas as imagens válidas no DOM da página com um overlay e permite clicar para definir como Page Cover.
 - **Screenshot Tool**: Captura a tela visível atual (`chrome.tabs.captureVisibleTab`) para anexar ou usar como capa.
 
-### 5.6 Integração e Autenticação com a API do Notion
-- **Método Adotado**: **Internal Integration Token** (`API token`).
-  - Usuário cria uma conexão em https://www.notion.so/my-integrations escolhendo `API token`.
-  - Compartilha as páginas e databases desejadas com a conexão.
-  - **Vantagens**: Sem custos, sem limites arbitrários de requisição, privacidade total (`chrome.storage.local`).
+### 5.7 Estratégias de Autenticação com a API do Notion
+- **Método V1 (Atual - Local-First & Zero-Cost)**: **Internal Integration Token** (`API token`).
+  - Sem necessidade de servidor intermediário;
+  - Conexão herdada pela página mãe do workspace.
+- **Método V2 (Futuro - OAuth 2.0 via Cloudflare Workers Free)**:
+  - Backend serverless de autenticação hospedado 100% gratuitamente no **Cloudflare Workers**.
+  - Fluxo *"Login com Notion"* oficial em 1 clique.
+  - Autorização global automática de todo o Workspace sem necessidade de conectar páginas manualmente.
 
 ---
 
@@ -111,6 +121,7 @@ graph TD
 - **Armazenamento**: `chrome.storage.local`
 - **Cliente Notion**: Notion REST API v1 (`2022-06-28`)
 - **Parser de Conteúdo**: `@mozilla/readability`
+- **Backend OAuth Serverless (Fase Futura)**: Cloudflare Workers (Plano Gratuito de 100k reqs/dia)
 
 ---
 
@@ -123,7 +134,8 @@ graph TD
 - [x] Suporte a salvar em **Databases** e em **Páginas** (como Sub-página ou Inserção de Bloco no final).
 - [x] Popup funcional para salvar com 1 clique e feedback com link direto.
 
-### Fase 2: Suporte Total a Propriedades & Metadados Avançados (Próxima)
+### Fase 2: Suporte Total a Propriedades & Seletor de Destinos Visual (Em Andamento)
+- [x] Seletor visual de locais de salvamento (*Select a Save Location* estilo Save.to com busca em tempo real e breadcrumbs de hierarquia).
 - [ ] Renderização customizada de Select e Multi-Select com cores oficiais do Notion.
 - [ ] Datepicker nativo e Checkboxes interativos no popup.
 - [ ] Seletor visual interativo de imagens da página para capa.
@@ -137,3 +149,8 @@ graph TD
 - [ ] Ferramenta de Highlighter para marcar textos na página web e salvar trechos.
 - [ ] Captura de screenshot da tela ativa.
 - [ ] Detecção de links já salvos para evitar duplicidade.
+
+### Fase 5: Backend Cloudflare Workers & Notion OAuth 2.0 (Zero-Config)
+- [ ] Criação do Cloudflare Worker para troca segura do authorization code OAuth 2.0 do Notion.
+- [ ] Botão "Conectar com Notion" em 1 clique na extensão sem precisar copiar tokens manuais.
+- [ ] Permissão automática para todo o workspace sem necessidade de adicionar conexões manuais em páginas.

@@ -69,8 +69,18 @@ export async function validateNotionApiKey(apiKey: string): Promise<{ valid: boo
   }
 }
 
+interface RawNotionSearchItem {
+  id: string;
+  title: string;
+  icon?: string;
+  type: NotionDestinationType;
+  parentId?: string;
+  parentType?: string;
+  properties?: Record<string, NotionPropertySchema>;
+}
+
 /**
- * Busca todas as databases E páginas que a integração tem acesso
+ * Busca todas as databases E páginas que a integração tem acesso, calculando hierarquia
  */
 export async function fetchDestinations(apiKey: string): Promise<NotionDestination[]> {
   const data = await notionRequest<{
@@ -86,7 +96,8 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
     },
   });
 
-  const destinations: NotionDestination[] = [];
+  const rawItems: RawNotionSearchItem[] = [];
+  const idToItemMap = new Map<string, RawNotionSearchItem>();
 
   for (const item of data.results) {
     let icon = '📄';
@@ -95,6 +106,9 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
     } else if (item.icon?.type === 'external') {
       icon = item.icon.external.url;
     }
+
+    const parentId = item.parent?.page_id || item.parent?.database_id || item.parent?.block_id;
+    const parentType = item.parent?.type;
 
     if (item.object === 'database') {
       let title = 'Base de Dados sem nome';
@@ -116,15 +130,20 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
         }
       }
 
-      destinations.push({
+      const parsed: RawNotionSearchItem = {
         id: item.id,
         title: title || 'Base de Dados sem nome',
         icon: item.icon ? icon : '📁',
         type: 'database',
+        parentId,
+        parentType,
         properties,
-      });
+      };
+
+      rawItems.push(parsed);
+      idToItemMap.set(item.id, parsed);
     } else if (item.object === 'page') {
-      // Ignora páginas que são apenas linhas/registros internos de uma Database
+      // Ignora páginas que são apenas linhas internas de uma Database
       if (item.parent?.type === 'database_id') {
         continue;
       }
@@ -140,14 +159,53 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
         }
       }
 
-      destinations.push({
+      const parsed: RawNotionSearchItem = {
         id: item.id,
         title: title || 'Página sem nome',
         icon: item.icon ? icon : '📄',
         type: 'page',
-      });
+        parentId,
+        parentType,
+      };
+
+      rawItems.push(parsed);
+      idToItemMap.set(item.id, parsed);
     }
   }
+
+  // Segunda passagem: constrói breadcrumb hierárquico igual ao Save.to (ex: "My Life / ... / Projects")
+  const destinations: NotionDestination[] = rawItems.map((item) => {
+    const pathParts: string[] = [];
+    let currParentId = item.parentId;
+
+    while (currParentId && idToItemMap.has(currParentId) && pathParts.length < 3) {
+      const parentObj = idToItemMap.get(currParentId)!;
+      pathParts.unshift(parentObj.title);
+      currParentId = parentObj.parentId;
+    }
+
+    let path = 'Workspace';
+    const firstPart = pathParts[0];
+    const secondPart = pathParts[1];
+    const lastPart = pathParts[pathParts.length - 1];
+
+    if (pathParts.length === 1 && firstPart) {
+      path = firstPart;
+    } else if (pathParts.length === 2 && firstPart && secondPart) {
+      path = `${firstPart} / ${secondPart}`;
+    } else if (pathParts.length >= 3 && firstPart && lastPart) {
+      path = `${firstPart} / ... / ${lastPart}`;
+    }
+
+    return {
+      id: item.id,
+      title: item.title,
+      icon: item.icon,
+      type: item.type,
+      path,
+      properties: item.properties,
+    };
+  });
 
   return destinations;
 }
