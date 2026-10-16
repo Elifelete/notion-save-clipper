@@ -48,6 +48,7 @@ export interface NotionPropertySchema {
     options: NotionPropertyOption[];
     groups: Array<{ id: string; name: string; option_ids: string[] }>;
   };
+  options?: NotionPropertyOption[];
 }
 
 export type PropertyDataSource =
@@ -97,9 +98,4 @@ export interface ExtractedMetadata {
   publishedDate?: string;
   siteName?: string;
   rawText?: string;
-}
-
-export interface UserSettings {
-  apiKey: string;
-  defaultDatabaseId?: string;
 }

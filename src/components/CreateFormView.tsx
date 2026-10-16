@@ -178,6 +178,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 notionPropertyId: pId,
                 notionPropertyName: propName,
                 notionPropertyType: pType,
+                options: prop?.options || prop?.multi_select?.options || prop?.select?.options || undefined,
                 source: 'manual',
                 showInPopup: true,
               });
@@ -241,8 +242,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     else if (pType === 'date' || lowerName.includes('data')) defaultSource = 'page_date';
     else if (lowerName.includes('author') || lowerName.includes('autor')) defaultSource = 'page_author';
 
+    const opts = prop?.options || prop?.multi_select?.options || prop?.select?.options || [];
     const newMapping: PropertyFieldMapping = {
       notionPropertyId: propId,
+      options: opts.length > 0 ? opts : undefined,
       notionPropertyName: propName,
       notionPropertyType: pType,
       source: defaultSource,

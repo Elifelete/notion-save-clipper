@@ -12,10 +12,11 @@ import {
   Trash2,
   Search,
   CheckCircle,
+  Loader2,
 } from 'lucide-react';
 import type { PropertyFieldMapping, NotionPropertyOption } from '../types';
 import { getNotionColor, NOTION_COLORS } from '../utils/notionColors';
-import { updateDatabasePropertyOptions } from '../services/notion';
+import { updateDatabasePropertyOptions, getDatabaseSchema } from '../services/notion';
 
 interface PropertyFieldProps {
   mapping: PropertyFieldMapping;
@@ -37,6 +38,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [options, setOptions] = useState<NotionPropertyOption[]>(mapping.options || []);
+  const [loadingOptions, setLoadingOptions] = useState(false);
 
   // Estado para Edição de Tag (Nome e Cor)
   const [editingOption, setEditingOption] = useState<NotionPropertyOption | null>(null);
@@ -47,8 +49,56 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
 
   // Sincroniza options locais se mapping mudar
   React.useEffect(() => {
-    setOptions(mapping.options || []);
+    if (mapping.options && mapping.options.length > 0) {
+      setOptions(mapping.options);
+    }
   }, [mapping.options]);
+
+  // Carrega opções atualizadas diretamente da API do Notion se apiKey e databaseId existirem
+  React.useEffect(() => {
+    let isMounted = true;
+    async function fetchLatestOptions() {
+      if (!apiKey || !databaseId || (type !== 'select' && type !== 'multi_select')) {
+        return;
+      }
+      try {
+        setLoadingOptions(true);
+        const schema = await getDatabaseSchema(apiKey, databaseId);
+        const props = schema.properties || {};
+
+        let foundProp = props[mapping.notionPropertyName];
+        if (!foundProp) {
+          foundProp = Object.values(props).find(
+            (p) =>
+              p.id === mapping.notionPropertyId ||
+              p.name?.toLowerCase() === mapping.notionPropertyName.toLowerCase()
+          );
+        }
+
+        if (foundProp && isMounted) {
+          const remoteOptions =
+            foundProp.options ||
+            foundProp.multi_select?.options ||
+            foundProp.select?.options ||
+            [];
+          if (remoteOptions.length > 0) {
+            setOptions(remoteOptions);
+            if (onOptionsUpdate) {
+              onOptionsUpdate(mapping.notionPropertyId, remoteOptions);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar opções do Notion:', err);
+      } finally {
+        if (isMounted) setLoadingOptions(false);
+      }
+    }
+    fetchLatestOptions();
+    return () => {
+      isMounted = false;
+    };
+  }, [apiKey, databaseId, mapping.notionPropertyId, mapping.notionPropertyName, type]);
 
   // Filtra opções em tempo real pela busca
   const filteredOptions = useMemo(() => {
@@ -240,7 +290,12 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
 
               {/* Lista Filtrada de Opções */}
               <div className="space-y-0.5 max-h-36 overflow-y-auto">
-                {filteredOptions.length === 0 && !searchQuery.trim() ? (
+                {loadingOptions && options.length === 0 ? (
+                  <div className="p-3 text-center text-gray-400 text-[11px] flex items-center justify-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                    <span>Carregando opções...</span>
+                  </div>
+                ) : filteredOptions.length === 0 && !searchQuery.trim() ? (
                   <div className="p-2 text-center text-gray-400 text-[11px]">
                     Nenhuma opção cadastrada
                   </div>
@@ -468,7 +523,12 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
 
                 {/* Lista de Opções Filtradas */}
                 <div className="max-h-36 overflow-y-auto space-y-0.5">
-                  {filteredOptions.length === 0 && !searchQuery.trim() ? (
+                  {loadingOptions && options.length === 0 ? (
+                    <div className="p-3 text-center text-gray-400 text-[11px] flex items-center justify-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                      <span>Carregando tags...</span>
+                    </div>
+                  ) : filteredOptions.length === 0 && !searchQuery.trim() ? (
                     <div className="p-2 text-center text-gray-400 text-[11px]">
                       Nenhuma tag cadastrada
                     </div>

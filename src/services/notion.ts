@@ -177,6 +177,7 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
             select: prop.select,
             multi_select: prop.multi_select,
             status: prop.status,
+            options: prop.multi_select?.options || prop.select?.options || prop.status?.options || [],
           };
         }
       }
@@ -308,7 +309,6 @@ export async function updateDatabasePropertyOptions(
         [propertyName]: {
           [propertyType]: {
             options: options.map((opt) => ({
-              ...(opt.id ? { id: opt.id } : {}),
               name: opt.name,
               color: opt.color || 'default',
             })),
@@ -340,6 +340,7 @@ export async function getDatabaseSchema(apiKey: string, databaseId: string): Pro
         select: prop.select,
         multi_select: prop.multi_select,
         status: prop.status,
+            options: prop.multi_select?.options || prop.select?.options || prop.status?.options || [],
       };
     }
   }

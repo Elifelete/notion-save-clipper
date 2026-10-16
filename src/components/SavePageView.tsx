@@ -26,6 +26,7 @@ import { createPage } from '../services/notion';
 import { getActiveTabArticle, detectSpecialPage, type ArticleParsedContent } from '../services/reader';
 import { CoverImagePicker } from './CoverImagePicker';
 import { PropertyField } from './PropertyField';
+import { saveForm } from '../services/storage'; import type { NotionPropertyOption } from '../types'; 
 
 interface SavePageViewProps {
   apiKey: string;
@@ -65,6 +66,18 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   const [saving, setSaving] = useState(false);
   const [savedPageInfo, setSavedPageInfo] = useState<{ id: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handleOptionsUpdate = async (propertyId: string, newOptions: NotionPropertyOption[]) => {
+    try {
+      const updatedMappings = (form.mappings || []).map((m) =>
+        m.notionPropertyId === propertyId ? { ...m, options: newOptions } : m
+      );
+      const updatedForm = { ...form, mappings: updatedMappings };
+      await saveForm(updatedForm);
+    } catch (err) {
+      console.warn("Falha ao persistir opções no formulário:", err);
+    }
+  };
 
   const specialType = detectSpecialPage(url);
   const draftKey = `notion_save_draft_${form.id}_${metadata.url || url}`;
@@ -391,6 +404,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
               onChange={(val) => handlePropertyValueChange(tagMapping.notionPropertyId, val)}
               apiKey={apiKey}
               databaseId={form.databaseId}
+              onOptionsUpdate={handleOptionsUpdate}
             />
           )}
 
@@ -565,6 +579,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                   onChange={(val) => handlePropertyValueChange(mapping.notionPropertyId, val)}
                   apiKey={apiKey}
                   databaseId={form.databaseId}
+                  onOptionsUpdate={handleOptionsUpdate}
                 />
               ))}
 
