@@ -27,7 +27,7 @@ export default defineContentScript({
         top: 16px !important;
         right: 16px !important;
         width: 380px !important;
-        height: 600px !important;
+        height: 520px !important;
         max-height: calc(100vh - 32px) !important;
         z-index: 2147483647 !important;
         border: none !important;
@@ -35,7 +35,8 @@ export default defineContentScript({
         box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
         background: #ffffff !important;
         color-scheme: light !important;
-        transition: opacity 0.15s ease, transform 0.15s ease !important;
+        overflow: hidden !important;
+        transition: height 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease !important;
       `;
 
       document.documentElement.appendChild(iframe);
@@ -74,13 +75,18 @@ export default defineContentScript({
       );
     }
 
-    // Escuta comando de fechar disparado pelo botão (✕) de dentro do iframe
+    // Escuta comandos de fechar ou redimensionar disparados de dentro do iframe
     window.addEventListener('message', (event) => {
+      const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
+      if (!iframe) return;
+
       if (event.data?.action === 'NOTION_SAVE_CLOSE') {
-        const iframe = document.getElementById(IFRAME_ID);
-        if (iframe) {
-          iframe.style.display = 'none';
-        }
+        iframe.style.display = 'none';
+      }
+
+      if (event.data?.action === 'NOTION_SAVE_RESIZE' && typeof event.data.height === 'number') {
+        const targetHeight = Math.min(Math.max(event.data.height, 220), window.innerHeight - 32);
+        iframe.style.height = `${targetHeight}px`;
       }
     });
   },

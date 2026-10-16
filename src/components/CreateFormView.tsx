@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  ChevronLeft,
   ArrowRight,
   Check,
   Plus,
@@ -51,11 +52,10 @@ interface SourceOption {
 const SOURCE_OPTIONS: SourceOption[] = [
   { source: 'page_title', label: 'Page Title', icon: Type },
   { source: 'page_description', label: 'Page Description', icon: AlignLeft },
+  { source: 'page_url', label: 'Url', icon: Link2 },
   { source: 'page_author', label: 'Author', icon: User },
   { source: 'page_date', label: 'Publication Date', icon: Calendar },
-  { source: 'page_url', label: 'Url', icon: Link2 },
-  { source: 'page_site_name', label: 'Resource Title', icon: Globe },
-  { source: 'manual', label: 'Empty (Manual)', icon: ToggleLeft },
+  { source: 'manual', label: 'Empty (Manual)', icon: FileText },
 ];
 
 export const CreateFormView: React.FC<CreateFormViewProps> = ({
@@ -63,158 +63,183 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   onFormCreated,
   onCancel,
 }) => {
+  // Passos: 'configure_form' (tela principal idêntica ao Save.to) ou 'select_location' (modal de escolher database/página)
+  const [step, setStep] = useState<'configure_form' | 'select_location'>('configure_form');
+
+  // Destinos Notion
   const [destinations, setDestinations] = useState<NotionDestination[]>([]);
+  const [selectedDestination, setSelectedDestination] = useState<NotionDestination | null>(null);
+  const [databaseProperties, setDatabaseProperties] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Navegação: 'configure_form' é a tela principal (estilo Save.to), 'select_location' é o seletor
-  const [step, setStep] = useState<'configure_form' | 'select_location'>('configure_form');
-
-  // Busca e Filtros para Seleção de Local
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<FilterType>('all');
-
-  // Destino selecionado
-  const [selectedDestination, setSelectedDestination] = useState<NotionDestination | null>(null);
-  const [databaseProperties, setDatabaseProperties] = useState<Record<string, any>>({});
-
-  // Configurações do Formulário (Save.to)
-  const [formName, setFormName] = useState('Save Links');
+  // Form Config
+  const [formName, setFormName] = useState('');
   const [formIcon, setFormIcon] = useState('🔖');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [detectExisting, setDetectExisting] = useState(false);
   const [clipAction, setClipAction] = useState<'bookmark' | 'article'>('bookmark');
   const [pageSaveMode, setPageSaveMode] = useState<PageSaveMode>('subpage');
 
-  // Campos Mapeados e Controle de Expansão
+  // Fields (mapeamentos)
   const [mappings, setMappings] = useState<PropertyFieldMapping[]>([]);
   const [showAllFields, setShowAllFields] = useState(false);
-  const [activeSourceMenuId, setActiveSourceMenuId] = useState<string | null>(null);
 
   // Dropdown "+ Add New Field"
   const [isAddFieldOpen, setIsAddFieldOpen] = useState(false);
   const [propertySearchQuery, setPropertySearchQuery] = useState('');
 
+  // Dropdown de escolha de Source de uma propriedade
+  const [activeSourceMenuId, setActiveSourceMenuId] = useState<string | null>(null);
+
+  // Busca e Filtro de Destinos
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<FilterType>('all');
   const [submitting, setSubmitting] = useState(false);
 
-  // Carrega destinos do Notion
+  // 1. Carrega todas as databases e páginas compartilhadas com a integração
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      setError(null);
+    async function loadDestinations() {
       try {
-        const list = await fetchDestinations(apiKey);
-        setDestinations(list);
+        setLoading(true);
+        setError(null);
+        const data = await fetchDestinations(apiKey);
+        setDestinations(data);
 
-        // Pré-seleciona a primeira database encontrada ou primeiro item
-        if (list.length > 0) {
-          const firstDb = list.find((d) => d.type === 'database') || list[0]!;
-          await handleChooseDestination(firstDb);
+        // Se houver destinos, seleciona o primeiro por padrão
+        if (data.length > 0 && data[0]) {
+          const first = data[0];
+          setSelectedDestination(first);
+          setFormName(`Salvar em ${first.title}`);
+        } else {
+          setStep('select_location');
         }
       } catch (err: any) {
-        setError(err.message || 'Falha ao buscar páginas e databases no Notion.');
+        setError(err.message || 'Erro ao carregar locais do Notion.');
       } finally {
         setLoading(false);
       }
     }
-    loadData();
+    loadDestinations();
   }, [apiKey]);
 
-  const handleChooseDestination = async (dest: NotionDestination) => {
-    setSelectedDestination(dest);
-    setFormName(dest.title !== 'Base de Dados sem nome' && dest.title !== 'Página sem nome' ? `Salvar em ${dest.title}` : 'Save Links');
+  // 2. Quando seleciona um destino, carrega seu schema se for database
+  useEffect(() => {
+    async function loadSchema() {
+      if (!selectedDestination) return;
 
-    if (dest.type === 'database') {
-      try {
-        const fullDb = await getDatabaseSchema(apiKey, dest.id);
-        setDatabaseProperties(fullDb.properties || {});
+      if (selectedDestination.type === 'database') {
+        try {
+          const schema = await getDatabaseSchema(apiKey, selectedDestination.id);
+          setDatabaseProperties(schema);
 
-        const initialMappings: PropertyFieldMapping[] = [];
+          // Inicializa mapeamentos inteligentes
+          const initialMappings: PropertyFieldMapping[] = [];
 
-        if (fullDb.properties) {
-          for (const [propName, prop] of Object.entries(fullDb.properties)) {
-            const propOptions = prop.select?.options || prop.multi_select?.options || prop.status?.options;
+          for (const [propName, prop] of Object.entries(schema) as [string, any][]) {
+            const pType = prop.type;
+            const pId = prop.id;
+            const lowerName = propName.toLowerCase();
 
-            if (prop.type === 'title') {
+            if (pType === 'title') {
               initialMappings.push({
-                notionPropertyId: prop.id,
+                notionPropertyId: pId,
                 notionPropertyName: propName,
                 notionPropertyType: 'title',
                 source: 'page_title',
                 showInPopup: true,
                 required: true,
               });
-            } else if (prop.type === 'multi_select' || prop.type === 'select') {
+            } else if (pType === 'url' || lowerName === 'url' || lowerName === 'link') {
               initialMappings.push({
-                notionPropertyId: prop.id,
+                notionPropertyId: pId,
                 notionPropertyName: propName,
-                notionPropertyType: prop.type,
-                source: 'manual',
-                options: propOptions,
-                showInPopup: true,
-              });
-            } else if (prop.type === 'url') {
-              initialMappings.push({
-                notionPropertyId: prop.id,
-                notionPropertyName: propName,
-                notionPropertyType: 'url',
+                notionPropertyType: pType,
                 source: 'page_url',
                 showInPopup: true,
               });
             } else if (
-              prop.type === 'rich_text' &&
-              (propName.toLowerCase().includes('desc') ||
-                propName.toLowerCase().includes('resumo') ||
-                propName.toLowerCase().includes('note'))
+              lowerName === 'description' ||
+              lowerName === 'descrição' ||
+              lowerName === 'resumo'
             ) {
               initialMappings.push({
-                notionPropertyId: prop.id,
+                notionPropertyId: pId,
                 notionPropertyName: propName,
-                notionPropertyType: 'rich_text',
+                notionPropertyType: pType,
                 source: 'page_description',
+                showInPopup: true,
+              });
+            } else if (pType === 'multi_select' || pType === 'select') {
+              initialMappings.push({
+                notionPropertyId: pId,
+                notionPropertyName: propName,
+                notionPropertyType: pType,
+                source: 'manual',
                 showInPopup: true,
               });
             }
           }
-        }
-        setMappings(initialMappings);
-      } catch (e: any) {
-        console.error('Erro ao carregar schema da database:', e);
-      }
-    } else {
-      setDatabaseProperties({});
-      setMappings([]);
-    }
-  };
 
-  const handleSelectLocation = async (dest: NotionDestination) => {
-    await handleChooseDestination(dest);
+          setMappings(initialMappings);
+        } catch (err) {
+          console.error('Erro ao ler propriedades da database:', err);
+        }
+      } else {
+        // Para páginas simples
+        setDatabaseProperties({});
+        setMappings([
+          {
+            notionPropertyId: 'title',
+            notionPropertyName: 'Name',
+            notionPropertyType: 'title',
+            source: 'page_title',
+            showInPopup: true,
+            required: true,
+          },
+          {
+            notionPropertyId: 'url',
+            notionPropertyName: 'URL',
+            notionPropertyType: 'url',
+            source: 'page_url',
+            showInPopup: true,
+          },
+        ]);
+      }
+    }
+
+    loadSchema();
+  }, [apiKey, selectedDestination]);
+
+  // Escolhe um novo local
+  const handleSelectLocation = (dest: NotionDestination) => {
+    setSelectedDestination(dest);
+    setFormName(`Salvar em ${dest.title}`);
     setStep('configure_form');
   };
 
-  // Remove um campo do formulário
+  // Remove um campo
   const handleRemoveField = (propId: string) => {
     setMappings((prev) => prev.filter((m) => m.notionPropertyId !== propId));
   };
 
-  // Adiciona um campo de database ao formulário
+  // Adiciona um campo vindo do schema da Database
   const handleAddFieldFromDatabase = (propName: string, prop: any) => {
-    const propOptions = prop.select?.options || prop.multi_select?.options || prop.status?.options;
-    const defaultSource: PropertyDataSource =
-      prop.type === 'title'
-        ? 'page_title'
-        : prop.type === 'url'
-        ? 'page_url'
-        : prop.name.toLowerCase().includes('desc')
-        ? 'page_description'
-        : 'manual';
+    if (mappings.some((m) => m.notionPropertyId === prop.id)) return;
+
+    let defaultSource: PropertyDataSource = 'manual';
+    const lowerName = propName.toLowerCase();
+    if (prop.type === 'title') defaultSource = 'page_title';
+    else if (prop.type === 'url' || lowerName.includes('url') || lowerName.includes('link')) defaultSource = 'page_url';
+    else if (lowerName.includes('desc') || lowerName.includes('resumo')) defaultSource = 'page_description';
+    else if (prop.type === 'date' || lowerName.includes('data')) defaultSource = 'page_date';
+    else if (lowerName.includes('author') || lowerName.includes('autor')) defaultSource = 'page_author';
 
     const newMapping: PropertyFieldMapping = {
       notionPropertyId: prop.id,
       notionPropertyName: propName,
       notionPropertyType: prop.type,
       source: defaultSource,
-      options: propOptions,
       showInPopup: true,
       required: prop.type === 'title',
     };
@@ -319,7 +344,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         </div>
         <button
           onClick={onCancel}
-          className="w-full py-1.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-md cursor-pointer"
+          className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-md font-medium text-xs cursor-pointer"
         >
           Voltar
         </button>
@@ -344,14 +369,15 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     const pageItems = filteredDestinations.filter((d) => d.type === 'page');
 
     return (
-      <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f9fafb] min-h-[460px]">
-        {/* Header com navegação */}
+      <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa] flex flex-col h-full min-h-[440px]">
+        {/* Header com navegação e seta de voltar */}
         <div className="flex items-center justify-between pb-2 border-b border-gray-200">
           <button
             onClick={() => setStep('configure_form')}
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
+            title="Voltar"
           >
-            <ChevronDown className="w-4 h-4 rotate-90" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="font-semibold text-sm text-gray-900">
             Select a Save Location
@@ -390,7 +416,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         </div>
 
         {/* Lista de Resultados */}
-        <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+        <div className="space-y-3 flex-1 overflow-y-auto pr-1">
           {filteredDestinations.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-xs">
               Nenhuma base ou página encontrada para "{searchQuery}".
@@ -473,13 +499,14 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   );
 
   return (
-    <div className="p-3.5 space-y-3.5 text-xs text-gray-800 bg-[#f8f9fa] min-h-[480px]">
+    <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa]">
       {/* Header Estilo Save.to */}
       <div className="flex items-center justify-between pb-1">
         <button
           type="button"
           onClick={onCancel}
           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
+          title="Voltar"
         >
           <ChevronDown className="w-4 h-4" />
         </button>
@@ -640,7 +667,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
             Fields
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200/90 shadow-2xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200/90 shadow-2xs overflow-visible">
             {/* Lista de Campos Mapeados */}
             <div className="divide-y divide-gray-100">
               {visibleFields.length === 0 ? (
@@ -694,7 +721,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                           )}
                         </button>
 
-                        {/* Menu de Seleção de Fonte (Estilo Save.to Image 5) */}
+                        {/* Menu de Seleção de Fonte */}
                         {activeSourceMenuId === mapping.notionPropertyId && (
                           <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 w-48 space-y-0.5 text-xs">
                             <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
@@ -738,65 +765,86 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 <span>Add New Field</span>
               </button>
 
-              {/* Dropdown Menu "+ Add New Field" (Estilo Save.to Imagens 3 e 4) */}
+              {/* Dropdown Menu "+ Add New Field" com Backdrop e Botão Fechar */}
               {isAddFieldOpen && (
-                <div className="absolute left-2 right-2 bottom-10 z-50 bg-white border border-gray-200 rounded-xl shadow-2xl p-2 space-y-2 max-h-64 overflow-y-auto">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
-                    <input
-                      type="text"
-                      value={propertySearchQuery}
-                      onChange={(e) => setPropertySearchQuery(e.target.value)}
-                      placeholder="Search for a property..."
-                      className="w-full pl-8 pr-2 py-1 border border-gray-200 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      autoFocus
-                    />
-                  </div>
+                <>
+                  {/* Backdrop para fechar ao clicar em qualquer lugar fora */}
+                  <div
+                    className="fixed inset-0 z-40 bg-black/15 transition-opacity"
+                    onClick={() => setIsAddFieldOpen(false)}
+                  />
 
-                  {/* Propriedades da Database */}
-                  <div className="space-y-1">
-                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1">
-                      Database Properties
+                  {/* Popover posicionado acima do botão com cabeçalho e botão de fechar */}
+                  <div className="absolute left-2 right-2 bottom-full mb-1.5 z-50 bg-white border border-gray-200 rounded-xl shadow-2xl p-2.5 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
+                    <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+                      <span className="font-bold text-xs text-gray-800">Adicionar Propriedade</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddFieldOpen(false)}
+                        className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                        title="Fechar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
-                    <div className="space-y-0.5">
-                      {Object.entries(databaseProperties)
-                        .filter(([name]) =>
-                          name.toLowerCase().includes(propertySearchQuery.toLowerCase())
-                        )
-                        .map(([propName, prop]: any) => {
-                          const isAlreadyAdded = mappings.some(
-                            (m) => m.notionPropertyId === prop.id
-                          );
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={propertySearchQuery}
+                        onChange={(e) => setPropertySearchQuery(e.target.value)}
+                        placeholder="Search for a property..."
+                        className="w-full pl-8 pr-2 py-1.5 border border-gray-200 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                        autoFocus
+                      />
+                    </div>
 
-                          return (
-                            <button
-                              key={prop.id}
-                              type="button"
-                              disabled={isAlreadyAdded}
-                              onClick={() => handleAddFieldFromDatabase(propName, prop)}
-                              className={`w-full flex items-center justify-between p-1.5 rounded-md text-xs text-left cursor-pointer transition-colors ${
-                                isAlreadyAdded
-                                  ? 'opacity-40 cursor-not-allowed bg-transparent'
-                                  : 'hover:bg-blue-50 text-gray-800'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 truncate">
-                                {renderPropertyIcon(prop.type)}
-                                <span className="font-medium truncate">{propName}</span>
-                              </div>
-                              <span className="text-[10px] text-gray-400">
-                                {isAlreadyAdded ? 'Already Added' : `+ Adicionar`}
-                              </span>
-                            </button>
-                          );
-                        })}
+                    {/* Propriedades da Database */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1">
+                        Database Properties
+                      </div>
+
+                      <div className="space-y-0.5">
+                        {Object.entries(databaseProperties)
+                          .filter(([name]) =>
+                            name.toLowerCase().includes(propertySearchQuery.toLowerCase())
+                          )
+                          .map(([propName, prop]: any) => {
+                            const isAlreadyAdded = mappings.some(
+                              (m) => m.notionPropertyId === prop.id
+                            );
+
+                            return (
+                              <button
+                                key={prop.id}
+                                type="button"
+                                disabled={isAlreadyAdded}
+                                onClick={() => handleAddFieldFromDatabase(propName, prop)}
+                                className={`w-full flex items-center justify-between p-1.5 rounded-md text-xs text-left cursor-pointer transition-colors ${
+                                  isAlreadyAdded
+                                    ? 'opacity-40 cursor-not-allowed bg-transparent'
+                                    : 'hover:bg-blue-50 text-gray-800'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  {renderPropertyIcon(prop.type)}
+                                  <span className="font-medium truncate">{propName}</span>
+                                </div>
+                                <span className="text-[10px] text-gray-400">
+                                  {isAlreadyAdded ? 'Already Added' : `+ Adicionar`}
+                                </span>
+                              </button>
+                            );
+                          })}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </>
               )}
 
-              {/* Botão de Expandir / Recolher Campos Extras (Ex: ⌄ 3 more fields) */}
+              {/* Botão de Expandir / Recolher Campos Extras */}
               {hiddenFieldsCount > 0 && (
                 <button
                   type="button"

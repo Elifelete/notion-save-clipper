@@ -5,16 +5,52 @@
   color-scheme: light;
 }
 
-html, body, #root {
+html, body {
   margin: 0;
   padding: 0;
   width: 100%;
-  min-height: 100%;
+  height: auto;
+  min-height: auto;
   background-color: #f8f9fa;
   color: #37352f;
   box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  height: auto;
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+/* Scrollbar moderno e elegante (sem barras cinzas do Windows) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.35);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.6);
 }
