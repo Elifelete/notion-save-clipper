@@ -4,15 +4,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Image as ImageIcon,
-  X,
   FileCheck,
-  Calendar,
-  Tag,
-  CheckSquare,
 } from 'lucide-react';
 import type { FormConfig, ExtractedMetadata } from '../types';
 import { createPage } from '../services/notion';
+import { CoverImagePicker } from './CoverImagePicker';
+import { PropertyField } from './PropertyField';
 
 interface SavePageViewProps {
   apiKey: string;
@@ -43,7 +40,25 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     setCoverUrl(metadata.coverImage);
     setSavedPageInfo(null);
     setError(null);
+
+    // Inicializa valores padrão das propriedades configuradas no formulário
+    const initialProps: Record<string, any> = {};
+    if (form.mappings) {
+      for (const m of form.mappings) {
+        if (m.defaultValue !== undefined) {
+          initialProps[m.notionPropertyId] = m.defaultValue;
+        }
+      }
+    }
+    setPropertyValues(initialProps);
   }, [metadata, form]);
+
+  const handlePropertyValueChange = (propertyId: string, val: any) => {
+    setPropertyValues((prev) => ({
+      ...prev,
+      [propertyId]: val,
+    }));
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,37 +154,11 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
 
   return (
     <div className="p-3.5 space-y-3.5 text-xs text-gray-800">
-      {/* Imagem de Capa */}
-      {coverUrl ? (
-        <div className="relative group rounded-md overflow-hidden h-24 border border-gray-200 bg-gray-100">
-          <img
-            src={coverUrl}
-            alt="Capa"
-            className="w-full h-full object-cover"
-            onError={() => setCoverUrl(undefined)}
-          />
-          <button
-            type="button"
-            onClick={() => setCoverUrl(undefined)}
-            title="Remover capa"
-            className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white p-1 rounded-full opacity-80 group-hover:opacity-100 transition-opacity cursor-pointer"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            const inputUrl = prompt('Insira a URL da imagem de capa:');
-            if (inputUrl) setCoverUrl(inputUrl.trim());
-          }}
-          className="w-full py-1.5 px-2 border border-dashed border-gray-300 hover:border-gray-400 rounded-md text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-[11px]"
-        >
-          <ImageIcon className="w-3.5 h-3.5" />
-          <span>+ Adicionar Capa</span>
-        </button>
-      )}
+      {/* Seletor Visual de Capa (com imagens da página e URL) */}
+      <CoverImagePicker
+        coverUrl={coverUrl}
+        onSelectCover={(url) => setCoverUrl(url)}
+      />
 
       {/* Formulário de salvamento */}
       <form onSubmit={handleSave} className="space-y-3">
@@ -216,36 +205,27 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           />
         </div>
 
-        {/* Outras propriedades customizadas configuradas no Form (quando for Database) */}
-        {!isSavingToPage &&
-          form.mappings &&
-          form.mappings
-            .filter(
-              (m) =>
-                m.showInPopup &&
-                m.notionPropertyType !== 'title' &&
-                m.notionPropertyType !== 'url' &&
-                m.source !== 'page_description'
-            )
-            .map((m) => (
-              <div key={m.notionPropertyId}>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  {m.notionPropertyName}
-                </label>
-                <input
-                  type="text"
-                  value={propertyValues[m.notionPropertyId] || ''}
-                  onChange={(e) =>
-                    setPropertyValues({
-                      ...propertyValues,
-                      [m.notionPropertyId]: e.target.value,
-                    })
-                  }
-                  placeholder={`Preencher ${m.notionPropertyName}...`}
-                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+        {/* Renderização Rica de Propriedades da Database (Cores Notion, Tags, Datepicker, Status) */}
+        {!isSavingToPage && form.mappings && (
+          <div className="space-y-2.5 pt-1 border-t border-gray-100">
+            {form.mappings
+              .filter(
+                (m) =>
+                  m.showInPopup &&
+                  m.notionPropertyType !== 'title' &&
+                  m.notionPropertyType !== 'url' &&
+                  m.source !== 'page_description'
+              )
+              .map((mapping) => (
+                <PropertyField
+                  key={mapping.notionPropertyId}
+                  mapping={mapping}
+                  value={propertyValues[mapping.notionPropertyId]}
+                  onChange={(val) => handlePropertyValueChange(mapping.notionPropertyId, val)}
                 />
-              </div>
-            ))}
+              ))}
+          </div>
+        )}
 
         {/* Mensagem de Erro */}
         {error && (

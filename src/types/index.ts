@@ -31,14 +31,20 @@ export type NotionPropertyType =
   | 'relation'
   | 'files';
 
+export interface NotionPropertyOption {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface NotionPropertySchema {
   id: string;
   name: string;
   type: NotionPropertyType;
-  select?: { options: Array<{ id: string; name: string; color: string }> };
-  multi_select?: { options: Array<{ id: string; name: string; color: string }> };
+  select?: { options: NotionPropertyOption[] };
+  multi_select?: { options: NotionPropertyOption[] };
   status?: {
-    options: Array<{ id: string; name: string; color: string }>;
+    options: NotionPropertyOption[];
     groups: Array<{ id: string; name: string; option_ids: string[] }>;
   };
 }
@@ -61,6 +67,7 @@ export interface PropertyFieldMapping {
   defaultValue?: any;
   showInPopup: boolean;
   required?: boolean;
+  options?: NotionPropertyOption[];
 }
 
 export type PageSaveMode = 'subpage' | 'append_block';

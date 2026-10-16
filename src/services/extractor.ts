@@ -57,6 +57,75 @@ export function extractPageMetadataScript(): ExtractedMetadata {
 }
 
 /**
+ * Função injetada na página para coletar todas as imagens significativas da página
+ */
+export function extractPageImagesScript(): string[] {
+  const urls = new Set<string>();
+
+  // 1. Meta tags de imagem (OG, Twitter)
+  const metaImages = [
+    document.querySelector('meta[property="og:image"]')?.getAttribute('content'),
+    document.querySelector('meta[name="twitter:image"]')?.getAttribute('content'),
+  ];
+  for (const img of metaImages) {
+    if (img && img.startsWith('http')) {
+      urls.add(img);
+    }
+  }
+
+  // 2. Tags <img> presentes no documento
+  const imgElements = Array.from(document.querySelectorAll('img'));
+  for (const img of imgElements) {
+    const src = img.currentSrc || img.src || img.getAttribute('data-src');
+    if (!src) continue;
+
+    // Filtra URLs inválidas
+    if (!src.startsWith('http')) continue;
+
+    // Filtra ícones minúsculos e rastreadores (ex: pixels de 1x1)
+    const width = img.naturalWidth || img.clientWidth || img.width;
+    const height = img.naturalHeight || img.clientHeight || img.height;
+    if (width > 0 && width < 80) continue;
+    if (height > 0 && height < 80) continue;
+
+    urls.add(src);
+    if (urls.size >= 30) break; // Limita a 30 imagens para não sobrecarregar
+  }
+
+  return Array.from(urls);
+}
+
+/**
+ * Executa a extração de imagens na aba ativa do navegador
+ */
+export async function getActiveTabImages(): Promise<string[]> {
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://')) {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: extractPageImagesScript,
+        });
+
+        if (results && results[0] && Array.isArray(results[0].result)) {
+          return results[0].result as string[];
+        }
+      }
+    } catch (e) {
+      console.warn('Falha ao extrair imagens via scripting API:', e);
+    }
+  }
+
+  // Fallbacks de exemplo para teste local
+  return [
+    'https://images.unsplash.com/photo-1517842645767-c639042777db?w=1200',
+    'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=1200',
+    'https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=1200',
+  ];
+}
+
+/**
  * Executa a extração na aba ativa do navegador
  */
 export async function getActiveTabMetadata(): Promise<ExtractedMetadata> {

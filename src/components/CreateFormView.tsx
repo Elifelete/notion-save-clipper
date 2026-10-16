@@ -104,6 +104,8 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
 
         if (fullDb.properties) {
           for (const [propName, prop] of Object.entries(fullDb.properties)) {
+            const propOptions = prop.select?.options || prop.multi_select?.options || prop.status?.options;
+
             if (prop.type === 'title') {
               initialMappings.push({
                 notionPropertyId: prop.id,
@@ -141,7 +143,8 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 notionPropertyName: propName,
                 notionPropertyType: prop.type,
                 source: 'manual',
-                showInPopup: false,
+                options: propOptions,
+                showInPopup: true, // Habilitado para facilitar tags, status, checkboxes
               });
             }
           }
@@ -510,7 +513,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           <label className="block font-medium text-gray-700 mb-1">
             Propriedades da Database para Exibir no Popup
           </label>
-          <div className="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-32 overflow-y-auto bg-gray-50">
+          <div className="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-36 overflow-y-auto bg-gray-50">
             {mappings.map((mapping) => (
               <label
                 key={mapping.notionPropertyId}

@@ -77,14 +77,15 @@ graph TD
   - Alternância imediata entre diferentes destinos no Notion.
 - **Tela 2: Preenchimento e Pré-visualização**:
   - Miniatura da capa extraída (com botão para trocar ou remover).
+  - Seletor visual interativo de capa com imagens extraídas do DOM da página ativa ou link customizado.
   - Título editável e URL.
   - Campos de propriedades nativos do Notion:
-    - **Select / Multi-select**: Exibe as opções existentes no Notion com suas respectivas cores originais.
-    - **Date**: Datepicker com opção de incluir hora.
-    - **Checkbox**: Toggle simples.
+    - **Select / Multi-select**: Exibe as opções existentes no Notion com suas respectivas cores oficiais e badges; permite adicionar tags dinamicamente.
+    - **Date**: Datepicker nativo com botão de limpar.
+    - **Checkbox**: Toggle/checkbox interativo.
     - **Text / Rich Text**: Input ou Textarea.
     - **Number**: Input numérico validado.
-    - **Status**: Seletor de status com agrupamento (To Do, In Progress, Complete).
+    - **Status**: Seletor de status com agrupamento.
   - Botão principal: **"Salvar no Notion"** (com feedback de loading e sucesso com link direto para abrir no Notion).
 
 ### 5.4 Extrator Inteligente de Conteúdo (Reader Mode & Metadados)
@@ -134,13 +135,13 @@ graph TD
 - [x] Suporte a salvar em **Databases** e em **Páginas** (como Sub-página ou Inserção de Bloco no final).
 - [x] Popup funcional para salvar com 1 clique e feedback com link direto.
 
-### Fase 2: Suporte Total a Propriedades & Seletor de Destinos Visual (Em Andamento)
+### Fase 2: Suporte Total a Propriedades & Metadados Avançados (Concluído)
 - [x] Seletor visual de locais de salvamento (*Select a Save Location* estilo Save.to com busca em tempo real e breadcrumbs de hierarquia).
-- [ ] Renderização customizada de Select e Multi-Select com cores oficiais do Notion.
-- [ ] Datepicker nativo e Checkboxes interativos no popup.
-- [ ] Seletor visual interativo de imagens da página para capa.
+- [x] Renderização customizada de Select e Multi-Select com cores oficiais do Notion (pills e badges coloridos com opção de adicionar tags).
+- [x] Datepicker nativo, Checkboxes interativos, campos numéricos e textarea no popup.
+- [x] Seletor visual interativo de imagens da página para capa (inspeção do DOM com grid de miniaturas e suporte a URL externa).
 
-### Fase 3: Extração de Artigo Completo (Readability)
+### Fase 3: Extração de Artigo Completo (Readability) (Próxima)
 - [ ] Captura do corpo inteiro do artigo com `@mozilla/readability`.
 - [ ] Parser HTML para blocos nativos do Notion (headings, quotes, code, bullet lists).
 - [ ] Suporte inteligente a links do YouTube, GitHub e Twitter.

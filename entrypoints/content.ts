@@ -1,4 +1,4 @@
-import { extractPageMetadataScript } from '@/src/services/extractor';
+import { extractPageMetadataScript, extractPageImagesScript } from '@/src/services/extractor';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -10,6 +10,16 @@ export default defineContentScript({
           try {
             const metadata = extractPageMetadataScript();
             sendResponse({ success: true, data: metadata });
+          } catch (e: any) {
+            sendResponse({ success: false, error: e.message });
+          }
+          return true;
+        }
+
+        if (request?.action === 'GET_PAGE_IMAGES') {
+          try {
+            const images = extractPageImagesScript();
+            sendResponse({ success: true, data: images });
           } catch (e: any) {
             sendResponse({ success: false, error: e.message });
           }
