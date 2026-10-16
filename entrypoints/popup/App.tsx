@@ -16,7 +16,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   // Telas: 'select_form' (Home estilo Save.to), 'save' (Save to Notion), 'create_form', 'settings'
-  const [currentView, setCurrentView] = useState<'select_form' | 'save' | 'settings' | 'create_form'>('select_form');
+  const [currentView, setCurrentView] = useState<'select_form' | 'save' | 'settings' | 'create_form'>('save');
   const [justCreatedFormName, setJustCreatedFormName] = useState<string | null>(null);
 
   const loadInitialData = async () => {
@@ -39,7 +39,6 @@ export default function App() {
         const activeId =
           storedForms.find((f) => f.id === defaultId)?.id || (storedForms[0] ? storedForms[0].id : '');
         setSelectedFormIdState(activeId);
-        // Inicia na tela de salvar se já houver um form ativo padrão, ou na Home
         setCurrentView('save');
       }
     } catch (e) {
@@ -77,13 +76,12 @@ export default function App() {
     setSelectedFormIdState(newForm.id);
     await setDefaultFormId(newForm.id);
     setJustCreatedFormName(newForm.name);
-    // Leva para a tela inicial (Select Form) exibindo o banner azul de confirmação
     setCurrentView('select_form');
   };
 
   if (loading) {
     return (
-      <div className="flex h-96 w-full items-center justify-center text-gray-500 bg-white">
+      <div className="flex h-[480px] w-full items-center justify-center text-gray-500 bg-white">
         <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
       </div>
     );
@@ -92,8 +90,8 @@ export default function App() {
   const selectedForm = forms.find((f) => f.id === selectedFormId) || forms[0];
 
   return (
-    <div className="flex flex-col min-h-[480px] w-[350px] bg-white font-sans text-gray-900 select-none overflow-x-hidden">
-      <main className="flex-1 overflow-y-auto">
+    <div className="flex flex-col min-h-[480px] w-full bg-[#f8f9fa] font-sans text-gray-900 select-none overflow-x-hidden">
+      <main className="flex-1 w-full flex flex-col">
         {/* TELA 1: Select Form (Home) */}
         {currentView === 'select_form' && (
           <SelectFormView
@@ -107,14 +105,26 @@ export default function App() {
         )}
 
         {/* TELA 2: Save Page (Save to Notion) */}
-        {currentView === 'save' && selectedForm && metadata && (
-          <SavePageView
-            apiKey={apiKey}
-            form={selectedForm}
-            metadata={metadata}
-            onBackToSelectForm={() => setCurrentView('select_form')}
-            onOpenSettings={() => setCurrentView('settings')}
-          />
+        {currentView === 'save' && (
+          selectedForm && metadata ? (
+            <SavePageView
+              apiKey={apiKey}
+              form={selectedForm}
+              metadata={metadata}
+              onBackToSelectForm={() => setCurrentView('select_form')}
+              onOpenSettings={() => setCurrentView('settings')}
+            />
+          ) : (
+            <div className="p-6 text-center space-y-3 bg-white min-h-[480px] flex flex-col items-center justify-center">
+              <p className="text-gray-500 text-xs">Nenhum formulário ativo selecionado.</p>
+              <button
+                onClick={() => setCurrentView('create_form')}
+                className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg"
+              >
+                Criar Formulário
+              </button>
+            </div>
+          )
         )}
 
         {/* TELA 3: Create Form */}

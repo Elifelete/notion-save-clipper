@@ -17,11 +17,9 @@ import {
   History,
   X,
   Type,
-  Tag as TagIcon,
   AlignLeft,
   Link2,
   Image as ImageIcon,
-  FileSpreadsheet,
 } from 'lucide-react';
 import type { FormConfig, ExtractedMetadata } from '../types';
 import { createPage } from '../services/notion';
@@ -69,19 +67,18 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const specialType = detectSpecialPage(url);
+  const draftKey = `notion_save_draft_${form.id}_${metadata.url || url}`;
 
+  // Inicializa dados e restaura rascunho persistido para evitar perda ao clicar fora
   useEffect(() => {
-    setTitle(metadata.title || '');
-    setUrl(metadata.url || '');
-    setDescription(metadata.description || '');
-    setCoverUrl(metadata.coverImage);
-    setIconUrl(metadata.favicon);
-    setClipAction(form.clipContent ? 'content' : 'bookmark');
-    setSavedPageInfo(null);
-    setError(null);
-
-    // Inicializa valores padrão
+    let initialTitle = metadata.title || '';
+    let initialUrl = metadata.url || '';
+    let initialDesc = metadata.description || '';
+    let initialCover = metadata.coverImage;
+    let initialIcon = metadata.favicon;
+    let initialClip = form.clipContent ? ('content' as const) : ('bookmark' as const);
     const initialProps: Record<string, any> = {};
+
     if (form.mappings) {
       for (const m of form.mappings) {
         if (m.defaultValue !== undefined) {
@@ -89,16 +86,41 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         }
       }
     }
-    setPropertyValues(initialProps);
 
-    // Pré-carrega artigo
+    // Tenta restaurar rascunho salvo anteriormente
+    try {
+      const savedDraft = localStorage.getItem(draftKey);
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed.title) initialTitle = parsed.title;
+        if (parsed.url) initialUrl = parsed.url;
+        if (parsed.description !== undefined) initialDesc = parsed.description;
+        if (parsed.coverUrl !== undefined) initialCover = parsed.coverUrl;
+        if (parsed.clipAction) initialClip = parsed.clipAction;
+        if (parsed.propertyValues) Object.assign(initialProps, parsed.propertyValues);
+      }
+    } catch (e) {
+      // Ignora erro de parsing
+    }
+
+    setTitle(initialTitle);
+    setUrl(initialUrl);
+    setDescription(initialDesc);
+    setCoverUrl(initialCover);
+    setIconUrl(initialIcon);
+    setClipAction(initialClip);
+    setPropertyValues(initialProps);
+    setSavedPageInfo(null);
+    setError(null);
+
+    // Pré-carrega artigo se necessário
     if (form.clipContent) {
       setLoadingArticle(true);
       getActiveTabArticle()
         .then((art) => {
           if (art) {
             setArticleData(art);
-            if (art.excerpt && !description) {
+            if (art.excerpt && !initialDesc) {
               setDescription(art.excerpt);
             }
           }
@@ -107,13 +129,40 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           setLoadingArticle(false);
         });
     }
-  }, [metadata, form]);
+  }, [metadata, form, draftKey]);
+
+  // Persiste rascunho a cada alteração
+  useEffect(() => {
+    if (!title && !description) return;
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          title,
+          url,
+          description,
+          coverUrl,
+          clipAction,
+          propertyValues,
+        })
+      );
+    } catch (e) {
+      // Ignore
+    }
+  }, [title, url, description, coverUrl, clipAction, propertyValues, draftKey]);
 
   const handlePropertyValueChange = (propertyId: string, val: any) => {
     setPropertyValues((prev) => ({
       ...prev,
       [propertyId]: val,
     }));
+  };
+
+  const handleClose = () => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ action: 'NOTION_SAVE_CLOSE' }, '*');
+    }
+    window.close();
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -152,6 +201,15 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         }
       }
 
+      // CORREÇÃO: Verifica se a propriedade 'Description' já está sendo salva na coluna da tabela do Notion
+      const hasDescriptionPropertyInDatabase = Object.keys(propertiesPayload).some(
+        (key) =>
+          key.toLowerCase() === 'description' ||
+          key.toLowerCase() === 'descrição' ||
+          key.toLowerCase() === 'descricao' ||
+          key.toLowerCase() === 'resumo'
+      );
+
       // Preparação dos blocos
       const contentBlocks: any[] = [];
 
@@ -164,7 +222,8 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             external: { url },
           },
         });
-        if (description) {
+        // Só adiciona como bloco de citação se a tabela NÃO tiver a coluna Description
+        if (description && !hasDescriptionPropertyInDatabase) {
           contentBlocks.push({
             object: 'block',
             type: 'quote',
@@ -183,7 +242,8 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             bookmark: { url },
           });
         }
-        if (description) {
+        // No modo Bookmark, se a Description já foi salva como propriedade da tabela, NÃO duplica no corpo!
+        if (description && !hasDescriptionPropertyInDatabase) {
           contentBlocks.push({
             object: 'block',
             type: 'quote',
@@ -208,6 +268,13 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         contentBlocks: contentBlocks.length > 0 ? contentBlocks : undefined,
       });
 
+      // Limpa rascunho após salvar com sucesso
+      try {
+        localStorage.removeItem(draftKey);
+      } catch (e) {
+        // Ignore
+      }
+
       setSavedPageInfo(result);
     } catch (err: any) {
       setError(err.message || 'Falha ao salvar no Notion.');
@@ -230,7 +297,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   ) || [];
 
   return (
-    <div className="flex flex-col min-h-[480px] bg-[#f8f9fa] text-xs text-gray-800">
+    <div className="flex flex-col min-h-[480px] w-full bg-[#f8f9fa] text-xs text-gray-800">
       {/* Top Header Estilo Save.to */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100">
         <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
@@ -251,7 +318,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => window.close()}
+            onClick={handleClose}
             title="Fechar"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >

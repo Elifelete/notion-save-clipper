@@ -13,5 +13,14 @@ export default defineConfig({
     version: '1.0.0',
     permissions: ['storage', 'activeTab', 'tabs', 'scripting'],
     host_permissions: ['https://api.notion.com/*', '<all_urls>'],
+    action: {
+      default_title: 'Notion Save',
+    },
+    web_accessible_resources: [
+      {
+        resources: ['popup.html', '*.js', '*.css', '*.svg', '*.png', 'assets/*', 'chunks/*'],
+        matches: ['<all_urls>'],
+      },
+    ],
   },
 });

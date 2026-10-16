@@ -31,8 +31,15 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
 
   const showBanner = Boolean(justCreatedFormName && !bannerClosed);
 
+  const handleClose = () => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ action: 'NOTION_SAVE_CLOSE' }, '*');
+    }
+    window.close();
+  };
+
   return (
-    <div className="flex flex-col min-h-[440px] bg-[#f8f9fa] text-xs text-gray-800">
+    <div className="flex flex-col min-h-[480px] w-full bg-[#f8f9fa] text-xs text-gray-800">
       {/* Top Header Estilo Save.to */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100">
         <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
@@ -53,7 +60,7 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => window.close()}
+            onClick={handleClose}
             title="Fechar"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
