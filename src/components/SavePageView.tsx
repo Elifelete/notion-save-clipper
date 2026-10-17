@@ -94,7 +94,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     }
   };
 
-  // Escuta mensagem de seleção do content script (Highlighter flutuante)
+  // Escuta mensagem de seleção ou seletor de elemento do content script
   useEffect(() => {
     const handleMsg = (event: MessageEvent) => {
       if (event.data?.action === 'NOTION_SAVE_SET_SELECTION' && event.data.selectedText) {
@@ -103,11 +103,25 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         setDescription((prev) => (prev ? prev + '\n\n"' + text + '"' : '"' + text + '"'));
         setClipAction('selection');
       }
+
+      if (event.data?.action === 'NOTION_SAVE_SET_CUSTOM_AREA' && event.data.text) {
+        const text = String(event.data.text).trim();
+        setSelectedHighlight(text);
+        setDescription((prev) => (prev ? prev + '\n\n"' + text + '"' : text));
+        setClipAction('selection');
+      }
     };
 
     window.addEventListener('message', handleMsg);
     return () => window.removeEventListener('message', handleMsg);
   }, []);
+
+  const handleStartCustomAreaPicker = () => {
+    setClipAction('selection');
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ action: 'NOTION_SAVE_START_ELEMENT_PICKER' }, '*');
+    }
+  };
 
   // Verifica se o link já foi salvo (se a opção detectExisting estiver ativa no formulário)
   useEffect(() => {
@@ -727,24 +741,30 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                   </label>
 
                   {/* Opção 3: Save custom area on webpage */}
-                  <label
-                    onClick={() => setClipAction('selection')}
+                  <div
+                    onClick={handleStartCustomAreaPicker}
                     className={`flex items-center justify-between p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
                       clipAction === 'selection' ? 'bg-blue-50/40 text-blue-900 font-semibold' : 'text-gray-700'
                     }`}
+                    title="Clique para selecionar visualmente uma área ou elemento na página"
                   >
                     <div className="flex items-center gap-2">
                       <Scissors className={`w-3.5 h-3.5 ${clipAction === 'selection' ? 'text-blue-600' : 'text-gray-400'}`} />
-                      <span className="text-[11px]">Save custom area on webpage</span>
+                      <div>
+                        <div className="text-[11px]">Save custom area on webpage</div>
+                        <div className="text-[10px] text-gray-400 font-normal">
+                          {selectedHighlight ? 'Área capturada!' : 'Clique para apontar e clicar na página'}
+                        </div>
+                      </div>
                     </div>
                     {clipAction === 'selection' ? (
-                      <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                      <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0">
                         <Check className="w-2.5 h-2.5" />
                       </div>
                     ) : (
-                      <div className="w-4 h-4 rounded-full border border-gray-300" />
+                      <div className="w-4 h-4 rounded-full border border-gray-300 shrink-0" />
                     )}
-                  </label>
+                  </div>
                 </div>
               </div>
 

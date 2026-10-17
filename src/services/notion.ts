@@ -716,8 +716,8 @@ export async function findExistingPageByUrl(
 
   try {
     if (destinationType === 'database') {
-      // 1. Tenta buscar filtrando diretamente pela propriedade da URL na database
       const db = await getDatabaseSchema(apiKey, destinationId);
+      // Procura propriedade do tipo 'url'
       const urlProp = Object.values(db.properties || {}).find((p) => p.type === 'url');
 
       if (urlProp) {
@@ -758,42 +758,7 @@ export async function findExistingPageByUrl(
       }
     }
 
-    // 2. Fallback: Busca via /search pelo texto da URL
-    const searchRes = await notionRequest<{ results: any[] }>(apiKey, '/search', {
-      method: 'POST',
-      body: {
-        query: cleanUrl,
-        page_size: 10,
-      },
-    });
-
-    if (searchRes.results && searchRes.results.length > 0) {
-      // Procura se algum item corresponde ao parent destino
-      const match = searchRes.results.find((item) => {
-        const parentId = item.parent?.database_id || item.parent?.page_id || item.parent?.block_id;
-        const normalizedParent = parentId ? parentId.replace(/-/g, '') : '';
-        const normalizedDest = destinationId.replace(/-/g, '');
-        return normalizedParent === normalizedDest;
-      });
-
-      if (match) {
-        let title = 'Página já salva';
-        if (match.properties) {
-          for (const prop of Object.values<any>(match.properties)) {
-            if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
-              title = prop.title.map((t: any) => t.plain_text).join('');
-              break;
-            }
-          }
-        }
-        return {
-          id: match.id,
-          url: match.url || `https://notion.so/${match.id.replace(/-/g, '')}`,
-          title,
-        };
-      }
-    }
-
+    // Se não encontrou por propriedade de URL exata, NÃO faz busca genérica que gera falsos positivos!
     return null;
   } catch (err) {
     console.warn('Erro ao verificar duplicidade de página:', err);

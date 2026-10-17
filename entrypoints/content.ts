@@ -75,13 +75,155 @@ export default defineContentScript({
       );
     }
 
-    // Escuta comandos de fechar ou redimensionar disparados de dentro do iframe
+    // --- ELEMENT SELECTOR (SAVE CUSTOM AREA) ---
+    let isElementSelectorActive = false;
+    let hoveredElement: HTMLElement | null = null;
+    let selectorOverlay: HTMLDivElement | null = null;
+    let selectorBadge: HTMLDivElement | null = null;
+
+    function startElementSelector() {
+      if (isElementSelectorActive) return;
+      isElementSelectorActive = true;
+
+      // Minimiza temporariamente o modal da extensão para dar foco na seleção
+      const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
+      if (iframe) {
+        iframe.style.opacity = '0.35';
+        iframe.style.pointerEvents = 'none';
+      }
+
+      // Cria a caixa de destaque (highlight box)
+      selectorOverlay = document.createElement('div');
+      selectorOverlay.id = 'notion-save-selector-box';
+      selectorOverlay.style.cssText = `
+        position: absolute !important;
+        z-index: 2147483640 !important;
+        pointer-events: none !important;
+        border: 2px solid #2563eb !important;
+        background: rgba(37, 99, 235, 0.12) !important;
+        border-radius: 6px !important;
+        transition: all 0.08s ease !important;
+        display: none !important;
+      `;
+
+      // Badge superior com instrução
+      selectorBadge = document.createElement('div');
+      selectorBadge.id = 'notion-save-selector-badge';
+      selectorBadge.innerHTML = `
+        <div style="
+          position: fixed;
+          top: 18px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 2147483646;
+          background: #111827;
+          color: white;
+          padding: 8px 16px;
+          border-radius: 9999px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        ">
+          <span>🎯 Passe o mouse e clique no elemento que deseja salvar (ESC para cancelar)</span>
+        </div>
+      `;
+
+      document.body.appendChild(selectorOverlay);
+      document.body.appendChild(selectorBadge);
+
+      document.addEventListener('mousemove', handleSelectorMouseMove, true);
+      document.addEventListener('click', handleSelectorClick, true);
+      document.addEventListener('keydown', handleSelectorKeyDown, true);
+    }
+
+    function stopElementSelector() {
+      isElementSelectorActive = false;
+      const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
+      if (iframe) {
+        iframe.style.opacity = '1';
+        iframe.style.pointerEvents = 'auto';
+      }
+
+      if (selectorOverlay && selectorOverlay.parentNode) {
+        selectorOverlay.parentNode.removeChild(selectorOverlay);
+      }
+      if (selectorBadge && selectorBadge.parentNode) {
+        selectorBadge.parentNode.removeChild(selectorBadge);
+      }
+      selectorOverlay = null;
+      selectorBadge = null;
+      hoveredElement = null;
+
+      document.removeEventListener('mousemove', handleSelectorMouseMove, true);
+      document.removeEventListener('click', handleSelectorClick, true);
+      document.removeEventListener('keydown', handleSelectorKeyDown, true);
+    }
+
+    function handleSelectorMouseMove(e: MouseEvent) {
+      if (!isElementSelectorActive) return;
+      const target = e.target as HTMLElement | null;
+      if (!target || target === selectorOverlay || target === selectorBadge || target.closest(`#${IFRAME_ID}`)) {
+        return;
+      }
+
+      hoveredElement = target;
+      const rect = target.getBoundingClientRect();
+      if (selectorOverlay) {
+        selectorOverlay.style.top = `${window.scrollY + rect.top}px`;
+        selectorOverlay.style.left = `${window.scrollX + rect.left}px`;
+        selectorOverlay.style.width = `${rect.width}px`;
+        selectorOverlay.style.height = `${rect.height}px`;
+        selectorOverlay.style.display = 'block';
+      }
+    }
+
+    function handleSelectorClick(e: MouseEvent) {
+      if (!isElementSelectorActive) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(`#${IFRAME_ID}`)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const el = hoveredElement || target;
+      if (el) {
+        const text = (el.innerText || el.textContent || '').trim();
+        const html = el.innerHTML;
+
+        const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage(
+            {
+              action: 'NOTION_SAVE_SET_CUSTOM_AREA',
+              text: text.slice(0, 3000),
+              html: html.slice(0, 8000),
+            },
+            '*'
+          );
+        }
+      }
+
+      stopElementSelector();
+    }
+
+    function handleSelectorKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        stopElementSelector();
+      }
+    }
+
+    // Escuta comandos disparados de dentro do iframe
     window.addEventListener('message', (event) => {
       const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
       if (!iframe) return;
 
       if (event.data?.action === 'NOTION_SAVE_CLOSE') {
         iframe.style.display = 'none';
+        stopElementSelector();
       }
 
       if (event.data?.action === 'NOTION_SAVE_RESIZE' && typeof event.data.height === 'number') {
@@ -89,8 +231,13 @@ export default defineContentScript({
         iframe.style.height = `${targetHeight}px`;
       }
 
+      if (event.data?.action === 'NOTION_SAVE_START_ELEMENT_PICKER') {
+        startElementSelector();
+      }
+    });
+
     // --- HIGHLIGHTER & FLOATING TOOLBAR ---
-    const HIGHLIGHT_BUTTON_ID = "notion-save-highlight-btn";
+    const HIGHLIGHT_BUTTON_ID = 'notion-save-highlight-btn';
     let activeHighlightBtn: HTMLDivElement | null = null;
 
     function removeHighlightButton() {
@@ -100,8 +247,9 @@ export default defineContentScript({
       activeHighlightBtn = null;
     }
 
-    document.addEventListener("mouseup", (e) => {
-      // Se clicou dentro do iframe ou do botão de highlight, não faz nada
+    document.addEventListener('mouseup', (e) => {
+      if (isElementSelectorActive) return;
+
       const target = e.target as HTMLElement | null;
       if (target?.closest && (target.closest(`#${IFRAME_ID}`) || target.closest(`#${HIGHLIGHT_BUTTON_ID}`))) {
         return;
@@ -109,7 +257,7 @@ export default defineContentScript({
 
       setTimeout(() => {
         const selection = window.getSelection();
-        const selectedText = selection ? selection.toString().trim() : "";
+        const selectedText = selection ? selection.toString().trim() : '';
 
         if (!selectedText || selectedText.length < 2) {
           removeHighlightButton();
@@ -124,7 +272,7 @@ export default defineContentScript({
         }
 
         if (!activeHighlightBtn) {
-          activeHighlightBtn = document.createElement("div");
+          activeHighlightBtn = document.createElement('div');
           activeHighlightBtn.id = HIGHLIGHT_BUTTON_ID;
           activeHighlightBtn.innerHTML = `
             <button type="button" style="
@@ -157,7 +305,7 @@ export default defineContentScript({
             pointer-events: auto !important;
           `;
 
-          activeHighlightBtn.addEventListener("click", (evt) => {
+          activeHighlightBtn.addEventListener('click', (evt) => {
             evt.stopPropagation();
             evt.preventDefault();
 
@@ -169,10 +317,10 @@ export default defineContentScript({
             if (iframe && iframe.contentWindow) {
               iframe.contentWindow.postMessage(
                 {
-                  action: "NOTION_SAVE_SET_SELECTION",
+                  action: 'NOTION_SAVE_SET_SELECTION',
                   selectedText,
                 },
-                "*"
+                '*'
               );
             }
 
@@ -182,23 +330,21 @@ export default defineContentScript({
           document.body.appendChild(activeHighlightBtn);
         }
 
-        // Posiciona o botão logo acima da seleção de texto
         const top = window.scrollY + rect.top - 42;
         const left = Math.max(10, window.scrollX + rect.left + rect.width / 2 - 60);
 
         activeHighlightBtn.style.top = `${Math.max(10, top)}px`;
         activeHighlightBtn.style.left = `${left}px`;
-        activeHighlightBtn.style.display = "block";
+        activeHighlightBtn.style.display = 'block';
       }, 20);
     });
 
-    document.addEventListener("mousedown", (e) => {
+    document.addEventListener('mousedown', (e) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest && (target.closest(`#${IFRAME_ID}`) || target.closest(`#${HIGHLIGHT_BUTTON_ID}`))) {
         return;
       }
       removeHighlightButton();
-    });
     });
   },
 });
