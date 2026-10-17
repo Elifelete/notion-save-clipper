@@ -94,6 +94,20 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     }
   };
 
+  // Permite cancelar o seletor mesmo se o foco estiver dentro do iframe ao pressionar ESC
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ action: 'NOTION_SAVE_STOP_ELEMENT_PICKER' }, '*');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Escuta mensagem de seleção ou seletor de elemento do content script
   useEffect(() => {
     const handleMsg = (event: MessageEvent) => {

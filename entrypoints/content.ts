@@ -88,7 +88,7 @@ export default defineContentScript({
       // Minimiza temporariamente o modal da extensão para dar foco na seleção
       const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
       if (iframe) {
-        iframe.style.opacity = '0.35';
+        iframe.style.opacity = '0.25';
         iframe.style.pointerEvents = 'none';
       }
 
@@ -106,37 +106,72 @@ export default defineContentScript({
         display: none !important;
       `;
 
-      // Badge superior com instrução
+      // Badge superior com instrução e BOTÃO DE CANCELAR CLICÁVEL
       selectorBadge = document.createElement('div');
       selectorBadge.id = 'notion-save-selector-badge';
+      selectorBadge.style.cssText = `
+        position: fixed !important;
+        top: 18px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 2147483646 !important;
+        user-select: none !important;
+        pointer-events: auto !important;
+      `;
       selectorBadge.innerHTML = `
         <div style="
-          position: fixed;
-          top: 18px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 2147483646;
           background: #111827;
           color: white;
-          padding: 8px 16px;
+          padding: 8px 14px 8px 16px;
           border-radius: 9999px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           font-size: 13px;
-          font-weight: 600;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
+          font-weight: 500;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 12px;
         ">
-          <span>🎯 Passe o mouse e clique no elemento que deseja salvar (ESC para cancelar)</span>
+          <span style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 14px;">🎯</span>
+            <span>Clique no elemento que deseja salvar</span>
+          </span>
+          <button id="notion-save-cancel-picker-btn" type="button" style="
+            background: #374151;
+            color: #f3f4f6;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.12s ease;
+          ">
+            <span>Cancelar</span>
+            <span style="opacity: 0.6; font-size: 10px;">(ESC)</span>
+          </button>
         </div>
       `;
 
       document.body.appendChild(selectorOverlay);
       document.body.appendChild(selectorBadge);
 
-      document.addEventListener('mousemove', handleSelectorMouseMove, true);
-      document.addEventListener('click', handleSelectorClick, true);
+      // Botão Cancelar direto no Badge
+      const cancelBtn = selectorBadge.querySelector('#notion-save-cancel-picker-btn');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          stopElementSelector();
+        });
+      }
+
+      window.addEventListener('mousemove', handleSelectorMouseMove, true);
+      window.addEventListener('click', handleSelectorClick, true);
+      window.addEventListener('keydown', handleSelectorKeyDown, true);
       document.addEventListener('keydown', handleSelectorKeyDown, true);
     }
 
@@ -158,15 +193,22 @@ export default defineContentScript({
       selectorBadge = null;
       hoveredElement = null;
 
-      document.removeEventListener('mousemove', handleSelectorMouseMove, true);
-      document.removeEventListener('click', handleSelectorClick, true);
+      window.removeEventListener('mousemove', handleSelectorMouseMove, true);
+      window.removeEventListener('click', handleSelectorClick, true);
+      window.removeEventListener('keydown', handleSelectorKeyDown, true);
       document.removeEventListener('keydown', handleSelectorKeyDown, true);
     }
 
     function handleSelectorMouseMove(e: MouseEvent) {
       if (!isElementSelectorActive) return;
       const target = e.target as HTMLElement | null;
-      if (!target || target === selectorOverlay || target === selectorBadge || target.closest(`#${IFRAME_ID}`)) {
+      if (
+        !target ||
+        target === selectorOverlay ||
+        target === selectorBadge ||
+        target.closest('#notion-save-selector-badge') ||
+        target.closest(`#${IFRAME_ID}`)
+      ) {
         return;
       }
 
@@ -184,7 +226,11 @@ export default defineContentScript({
     function handleSelectorClick(e: MouseEvent) {
       if (!isElementSelectorActive) return;
       const target = e.target as HTMLElement | null;
-      if (target?.closest(`#${IFRAME_ID}`)) return;
+
+      // Se clicou no badge de cancelar ou dentro do modal, não intercepta como elemento da página
+      if (target?.closest('#notion-save-selector-badge') || target?.closest(`#${IFRAME_ID}`)) {
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();
@@ -211,7 +257,10 @@ export default defineContentScript({
     }
 
     function handleSelectorKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
+      if (!isElementSelectorActive) return;
+      if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
+        e.preventDefault();
+        e.stopPropagation();
         stopElementSelector();
       }
     }
@@ -233,6 +282,10 @@ export default defineContentScript({
 
       if (event.data?.action === 'NOTION_SAVE_START_ELEMENT_PICKER') {
         startElementSelector();
+      }
+
+      if (event.data?.action === 'NOTION_SAVE_STOP_ELEMENT_PICKER') {
+        stopElementSelector();
       }
     });
 
