@@ -31,7 +31,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { NotionDestination, FormConfig, PropertyFieldMapping, PageSaveMode, PropertyDataSource } from '../types';
-import { fetchDestinations, getDatabaseSchema } from '../services/notion';
+import { fetchDestinations, getDatabaseSchema, searchNotionByQuery } from '../services/notion';
 import { saveForm } from '../services/storage';
 
 interface CreateFormViewProps {
@@ -105,6 +105,35 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [submitting, setSubmitting] = useState(false);
+
+  const [searchingServer, setSearchingServer] = useState(false);
+
+  // Busca debounced ao vivo no Notion caso o usuário digite na barra de busca
+  useEffect(() => {
+    if (step !== 'select_location') return;
+    const query = searchQuery.trim();
+    if (query.length < 2) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        setSearchingServer(true);
+        const serverResults = await searchNotionByQuery(apiKey, query);
+        if (serverResults.length > 0) {
+          setDestinations((prev) => {
+            const existingIds = new Set(prev.map((d) => d.id));
+            const newItems = serverResults.filter((r) => !existingIds.has(r.id));
+            return newItems.length > 0 ? [...prev, ...newItems] : prev;
+          });
+        }
+      } catch (err) {
+        console.warn('Erro na busca ao vivo do Notion:', err);
+      } finally {
+        setSearchingServer(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, step, apiKey]);
 
   // 1. Carrega todas as databases e páginas compartilhadas com a integração
   useEffect(() => {
@@ -434,9 +463,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search databases and pages..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full pl-9 pr-8 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             autoFocus
           />
+          {searchingServer && (
+            <Loader2 className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-blue-500 animate-spin" />
+          )}
         </div>
 
         {/* Filtro: Viewing */}
@@ -479,8 +511,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                           onClick={() => handleSelectLocation(db)}
                           className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
                         >
-                          <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
-                            {db.icon || '📁'}
+                          <span className="text-base shrink-0 w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
+                            {db.icon && (db.icon.startsWith('http://') || db.icon.startsWith('https://')) ? (
+                              <img src={db.icon} alt="" className="w-4 h-4 object-contain rounded" />
+                            ) : (
+                              <span>{db.icon || '📁'}</span>
+                            )}
                           </span>
                           <div className="truncate flex-1 min-w-0">
                             <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">
@@ -524,8 +560,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                           onClick={() => handleSelectLocation(pg)}
                           className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
                         >
-                          <span className="text-base shrink-0 p-1 bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
-                            {pg.icon || '📄'}
+                          <span className="text-base shrink-0 w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
+                            {pg.icon && (pg.icon.startsWith('http://') || pg.icon.startsWith('https://')) ? (
+                              <img src={pg.icon} alt="" className="w-4 h-4 object-contain rounded" />
+                            ) : (
+                              <span>{pg.icon || '📄'}</span>
+                            )}
                           </span>
                           <div className="truncate flex-1 min-w-0">
                             <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">

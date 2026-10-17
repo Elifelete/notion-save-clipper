@@ -130,31 +130,79 @@ interface RawNotionSearchItem {
 }
 
 /**
- * Busca todas as databases E páginas que a integração tem acesso, calculando hierarquia e caminhos
+ * Busca objetos no Notion com paginação completa e filtro de tipo ('database' ou 'page')
  */
-export async function fetchDestinations(apiKey: string): Promise<NotionDestination[]> {
-  const data = await notionRequest<{
-    results: any[];
-  }>(apiKey, '/search', {
-    method: 'POST',
-    body: {
-      page_size: 100,
-      sort: {
-        direction: 'descending',
-        timestamp: 'last_edited_time',
-      },
-    },
-  });
+async function searchNotionObjects(
+  apiKey: string,
+  objectType: 'database' | 'page',
+  maxItems = 300
+): Promise<any[]> {
+  const items: any[] = [];
+  let startCursor: string | undefined = undefined;
+  let hasMore = true;
 
+  while (hasMore && items.length < maxItems) {
+    try {
+      const body: Record<string, any> = {
+        page_size: 100,
+        filter: {
+          property: 'object',
+          value: objectType,
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time',
+        },
+      };
+
+      if (startCursor) {
+        body.start_cursor = startCursor;
+      }
+
+      const response = await notionRequest<{
+        results: any[];
+        has_more: boolean;
+        next_cursor: string | null;
+      }>(apiKey, '/search', {
+        method: 'POST',
+        body,
+      });
+
+      if (response.results && response.results.length > 0) {
+        items.push(...response.results);
+      }
+
+      hasMore = Boolean(response.has_more && response.next_cursor);
+      startCursor = response.next_cursor || undefined;
+    } catch (err) {
+      console.warn(`Erro ao buscar ${objectType}s paginados no Notion:`, err);
+      break;
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Converte itens retornados pela API do Notion em NotionDestination com hierarquia e caminhos
+ */
+async function parseRawItemsToDestinations(
+  apiKey: string,
+  results: any[]
+): Promise<NotionDestination[]> {
   const rawItems: RawNotionSearchItem[] = [];
   const idToItemMap = new Map<string, RawNotionSearchItem>();
 
-  for (const item of data.results) {
-    let icon = '📄';
+  for (const item of results) {
+    if (idToItemMap.has(item.id)) continue;
+
+    let icon = item.object === 'database' ? '📁' : '📄';
     if (item.icon?.type === 'emoji') {
       icon = item.icon.emoji;
     } else if (item.icon?.type === 'external') {
-      icon = item.icon.external.url;
+      icon = item.icon.external?.url || icon;
+    } else if (item.icon?.type === 'file') {
+      icon = item.icon.file?.url || icon;
     }
 
     const parentId = item.parent?.page_id || item.parent?.database_id || item.parent?.block_id;
@@ -196,13 +244,8 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
       rawItems.push(parsed);
       idToItemMap.set(item.id, parsed);
     } else if (item.object === 'page') {
-      // Ignora páginas que são apenas linhas internas de uma Database
-      if (item.parent?.type === 'database_id') {
-        continue;
-      }
-
       // Extrai o título da página
-      let title = 'Página sem nome';
+      let title = '';
       if (item.properties) {
         for (const prop of Object.values<any>(item.properties)) {
           if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
@@ -212,9 +255,14 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
         }
       }
 
+      // Se a página não tiver nenhum título preenchido, pula entradas em branco
+      if (!title.trim()) {
+        continue;
+      }
+
       const parsed: RawNotionSearchItem = {
         id: item.id,
-        title: title || 'Página sem nome',
+        title: title.trim(),
         icon: item.icon ? icon : '📄',
         type: 'page',
         parentId,
@@ -236,8 +284,9 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
   }
 
   if (missingParents.size > 0) {
+    const parentsToFetch = Array.from(missingParents).slice(0, 20);
     await Promise.all(
-      Array.from(missingParents).map(async (pId) => {
+      parentsToFetch.map(async (pId) => {
         const sampleItem = rawItems.find((r) => r.parentId === pId);
         const info = await resolveParentInfo(apiKey, pId, sampleItem?.parentType);
         if (info) {
@@ -253,8 +302,8 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
     );
   }
 
-  // Constrói breadcrumb hierárquico com caminho completo (ex: "Workspace / Projetos / sites")
-  const destinations: NotionDestination[] = rawItems.map((item) => {
+  // Constrói breadcrumb hierárquico com caminho completo
+  return rawItems.map((item) => {
     const pathParts: string[] = [];
     let currParentId = item.parentId;
 
@@ -285,8 +334,43 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
       properties: item.properties,
     };
   });
+}
 
-  return destinations;
+/**
+ * Busca todas as databases E páginas que a integração tem acesso, com paginação completa
+ */
+export async function fetchDestinations(apiKey: string): Promise<NotionDestination[]> {
+  const [databasesRaw, pagesRaw] = await Promise.all([
+    searchNotionObjects(apiKey, 'database', 300),
+    searchNotionObjects(apiKey, 'page', 500),
+  ]);
+
+  return parseRawItemsToDestinations(apiKey, [...databasesRaw, ...pagesRaw]);
+}
+
+/**
+ * Pesquisa no servidor do Notion por título em tempo real
+ */
+export async function searchNotionByQuery(
+  apiKey: string,
+  query: string
+): Promise<NotionDestination[]> {
+  if (!query.trim()) return [];
+
+  try {
+    const response = await notionRequest<{ results: any[] }>(apiKey, '/search', {
+      method: 'POST',
+      body: {
+        query: query.trim(),
+        page_size: 50,
+      },
+    });
+
+    return parseRawItemsToDestinations(apiKey, response.results || []);
+  } catch (err) {
+    console.warn('Erro na busca Notion por query:', err);
+    return [];
+  }
 }
 
 // Mantém retrocompatibilidade de chamada
