@@ -107,6 +107,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   const [searchingServer, setSearchingServer] = useState(false);
+  const [expandAllDatabases, setExpandAllDatabases] = useState(false);
+  const [expandAllPages, setExpandAllPages] = useState(false);
+  const [isDatabasesCollapsed, setIsDatabasesCollapsed] = useState(false);
+  const [isPagesCollapsed, setIsPagesCollapsed] = useState(false);
 
   // Busca debounced ao vivo no Notion caso o usuário digite na barra de busca
   useEffect(() => {
@@ -438,6 +442,23 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     const databaseItems = filteredDestinations.filter((d) => d.type === 'database');
     const pageItems = filteredDestinations.filter((d) => d.type === 'page');
 
+    const isSearching = searchQuery.trim().length > 0;
+    const visibleDatabases = isSearching
+      ? databaseItems
+      : isDatabasesCollapsed
+      ? []
+      : expandAllDatabases
+      ? databaseItems
+      : databaseItems.slice(0, 6);
+
+    const visiblePages = isSearching
+      ? pageItems
+      : isPagesCollapsed
+      ? []
+      : expandAllPages
+      ? pageItems
+      : pageItems.slice(0, 6);
+
     return (
       <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa] flex flex-col h-full min-h-[440px]">
         {/* Header com navegação e seta de voltar */}
@@ -497,99 +518,163 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
             <>
               {databaseItems.length > 0 && (
                 <div className="space-y-1">
-                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1">
-                    Databases ({databaseItems.length})
-                  </div>
-                  <div className="space-y-1">
-                    {databaseItems.map((db) => (
-                      <div
-                        key={db.id}
-                        className="w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left group"
+                  <div className="flex items-center justify-between px-1">
+                    <button
+                      type="button"
+                      onClick={() => !isSearching && setIsDatabasesCollapsed((prev) => !prev)}
+                      className={`flex items-center gap-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors ${isSearching ? 'cursor-default' : 'cursor-pointer'}`}
+                    >
+                      <span>Databases ({databaseItems.length})</span>
+                      {!isSearching && (
+                        isDatabasesCollapsed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
+                      )}
+                    </button>
+                    {!isSearching && databaseItems.length > 6 && !isDatabasesCollapsed && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandAllDatabases((prev) => !prev)}
+                        className="text-[10px] font-medium text-blue-600 hover:underline cursor-pointer"
                       >
+                        {expandAllDatabases ? "Recolher" : `Ver todas (${databaseItems.length})`}
+                      </button>
+                    )}
+                  </div>
+
+                  {!isDatabasesCollapsed && (
+                    <div className="space-y-1">
+                      {visibleDatabases.map((db) => (
+                        <div
+                          key={db.id}
+                          className="w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left group"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSelectLocation(db)}
+                            className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
+                          >
+                            <span className="text-base shrink-0 w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
+                              {db.icon && (db.icon.startsWith('http://') || db.icon.startsWith('https://')) ? (
+                                <img src={db.icon} alt="" className="w-4 h-4 object-contain rounded" />
+                              ) : (
+                                <span>{db.icon || '📁'}</span>
+                              )}
+                            </span>
+                            <div className="truncate flex-1 min-w-0">
+                              <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">
+                                {db.title}
+                              </div>
+                              <div className="text-[10px] text-gray-400 truncate">
+                                {db.path || 'Workspace'}
+                              </div>
+                            </div>
+                          </button>
+
+                          <a
+                            href={db.url || `https://www.notion.so/${db.id.replace(/-/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Abrir no Notion em nova aba"
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      ))}
+
+                      {!isSearching && databaseItems.length > 6 && !expandAllDatabases && (
                         <button
                           type="button"
-                          onClick={() => handleSelectLocation(db)}
-                          className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
+                          onClick={() => setExpandAllDatabases(true)}
+                          className="w-full py-1.5 text-center text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1 border border-dashed border-blue-200 mt-1"
                         >
-                          <span className="text-base shrink-0 w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
-                            {db.icon && (db.icon.startsWith('http://') || db.icon.startsWith('https://')) ? (
-                              <img src={db.icon} alt="" className="w-4 h-4 object-contain rounded" />
-                            ) : (
-                              <span>{db.icon || '📁'}</span>
-                            )}
-                          </span>
-                          <div className="truncate flex-1 min-w-0">
-                            <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">
-                              {db.title}
-                            </div>
-                            <div className="text-[10px] text-gray-400 truncate">
-                              {db.path || 'Workspace'}
-                            </div>
-                          </div>
+                          <span>Mostrar mais ({databaseItems.length - 6} restantes)</span>
+                          <ChevronDown className="w-3 h-3" />
                         </button>
-
-                        <a
-                          href={db.url || `https://www.notion.so/${db.id.replace(/-/g, '')}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Abrir no Notion em nova aba"
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
               {pageItems.length > 0 && (
                 <div className="space-y-1 pt-1">
-                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1">
-                    Pages ({pageItems.length})
-                  </div>
-                  <div className="space-y-1">
-                    {pageItems.map((pg) => (
-                      <div
-                        key={pg.id}
-                        className="w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left group"
+                  <div className="flex items-center justify-between px-1">
+                    <button
+                      type="button"
+                      onClick={() => !isSearching && setIsPagesCollapsed((prev) => !prev)}
+                      className={`flex items-center gap-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors ${isSearching ? 'cursor-default' : 'cursor-pointer'}`}
+                    >
+                      <span>Pages ({pageItems.length})</span>
+                      {!isSearching && (
+                        isPagesCollapsed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
+                      )}
+                    </button>
+                    {!isSearching && pageItems.length > 6 && !isPagesCollapsed && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandAllPages((prev) => !prev)}
+                        className="text-[10px] font-medium text-blue-600 hover:underline cursor-pointer"
                       >
+                        {expandAllPages ? "Recolher" : `Ver todas (${pageItems.length})`}
+                      </button>
+                    )}
+                  </div>
+
+                  {!isPagesCollapsed && (
+                    <div className="space-y-1">
+                      {visiblePages.map((pg) => (
+                        <div
+                          key={pg.id}
+                          className="w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white transition-all text-left group"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSelectLocation(pg)}
+                            className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
+                          >
+                            <span className="text-base shrink-0 w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
+                              {pg.icon && (pg.icon.startsWith('http://') || pg.icon.startsWith('https://')) ? (
+                                <img src={pg.icon} alt="" className="w-4 h-4 object-contain rounded" />
+                              ) : (
+                                <span>{pg.icon || '📄'}</span>
+                              )}
+                            </span>
+                            <div className="truncate flex-1 min-w-0">
+                              <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">
+                                {pg.title}
+                              </div>
+                              <div className="text-[10px] text-gray-400 truncate">
+                                {pg.path || 'Workspace'}
+                              </div>
+                            </div>
+                          </button>
+
+                          <a
+                            href={pg.url || `https://www.notion.so/${pg.id.replace(/-/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Abrir no Notion em nova aba"
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      ))}
+
+                      {!isSearching && pageItems.length > 6 && !expandAllPages && (
                         <button
                           type="button"
-                          onClick={() => handleSelectLocation(pg)}
-                          className="flex items-center gap-2.5 truncate flex-1 min-w-0 cursor-pointer text-left"
+                          onClick={() => setExpandAllPages(true)}
+                          className="w-full py-1.5 text-center text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1 border border-dashed border-blue-200 mt-1"
                         >
-                          <span className="text-base shrink-0 w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md group-hover:bg-blue-50 transition-colors">
-                            {pg.icon && (pg.icon.startsWith('http://') || pg.icon.startsWith('https://')) ? (
-                              <img src={pg.icon} alt="" className="w-4 h-4 object-contain rounded" />
-                            ) : (
-                              <span>{pg.icon || '📄'}</span>
-                            )}
-                          </span>
-                          <div className="truncate flex-1 min-w-0">
-                            <div className="font-semibold text-gray-900 truncate text-xs group-hover:text-blue-600 transition-colors">
-                              {pg.title}
-                            </div>
-                            <div className="text-[10px] text-gray-400 truncate">
-                              {pg.path || 'Workspace'}
-                            </div>
-                          </div>
+                          <span>Mostrar mais ({pageItems.length - 6} restantes)</span>
+                          <ChevronDown className="w-3 h-3" />
                         </button>
-
-                        <a
-                          href={pg.url || `https://www.notion.so/${pg.id.replace(/-/g, '')}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Abrir no Notion em nova aba"
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </>
