@@ -36,6 +36,7 @@ import { saveForm } from '../services/storage';
 
 interface CreateFormViewProps {
   apiKey: string;
+  initialForm?: FormConfig;
   onFormCreated: (form: FormConfig) => void;
   onCancel: () => void;
 }
@@ -61,6 +62,7 @@ const SOURCE_OPTIONS: SourceOption[] = [
 
 export const CreateFormView: React.FC<CreateFormViewProps> = ({
   apiKey,
+  initialForm,
   onFormCreated,
   onCancel,
 }) => {
@@ -75,15 +77,21 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // Form Config
-  const [formName, setFormName] = useState('');
-  const [formIcon, setFormIcon] = useState('🔖');
+  const [formName, setFormName] = useState(initialForm?.name || '');
+  const [formIcon, setFormIcon] = useState(initialForm?.icon || '🔖');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [detectExisting, setDetectExisting] = useState(false);
-  const [clipAction, setClipAction] = useState<'bookmark' | 'article'>('bookmark');
-  const [pageSaveMode, setPageSaveMode] = useState<PageSaveMode>('subpage');
+  const [clipAction, setClipAction] = useState<'bookmark' | 'article'>(
+    initialForm?.clipContent ? 'article' : 'bookmark'
+  );
+  const [pageSaveMode, setPageSaveMode] = useState<PageSaveMode>(
+    initialForm?.pageSaveMode || 'subpage'
+  );
 
   // Fields (mapeamentos)
-  const [mappings, setMappings] = useState<PropertyFieldMapping[]>([]);
+  const [mappings, setMappings] = useState<PropertyFieldMapping[]>(
+    initialForm?.mappings || []
+  );
   const [showAllFields, setShowAllFields] = useState(false);
 
   // Dropdown "+ Add New Field"
@@ -107,8 +115,23 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         const data = await fetchDestinations(apiKey);
         setDestinations(data);
 
-        // Se houver destinos, seleciona o primeiro por padrão
-        if (data.length > 0 && data[0]) {
+        if (initialForm) {
+          const match = data.find((d) => d.id === initialForm.databaseId);
+          if (match) {
+            setSelectedDestination(match);
+          } else {
+            setSelectedDestination({
+              id: initialForm.databaseId,
+              title: initialForm.databaseTitle,
+              icon: initialForm.icon || '📁',
+              type: initialForm.destinationType,
+              url: initialForm.destinationUrl,
+            });
+          }
+          setFormName(initialForm.name);
+          setFormIcon(initialForm.icon || '🔖');
+          setMappings(initialForm.mappings || []);
+        } else if (data.length > 0 && data[0]) {
           const first = data[0];
           setSelectedDestination(first);
           setFormName(`Salvar em ${first.title}`);
@@ -134,6 +157,11 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           const destSchema = await getDatabaseSchema(apiKey, selectedDestination.id);
           const properties = destSchema.properties || selectedDestination.properties || {};
           setDatabaseProperties(properties);
+
+          // Se estivermos editando e for a mesma database, mantém os mapeamentos existentes
+          if (initialForm && initialForm.databaseId === selectedDestination.id && mappings.length > 0) {
+            return;
+          }
 
           // Inicializa mapeamentos inteligentes
           const initialMappings: PropertyFieldMapping[] = [];
@@ -192,6 +220,9 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
       } else {
         // Para páginas simples
         setDatabaseProperties({});
+        if (initialForm && initialForm.databaseId === selectedDestination.id && mappings.length > 0) {
+          return;
+        }
         setMappings([
           {
             notionPropertyId: 'title',
@@ -273,7 +304,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     setSubmitting(true);
     try {
       const newForm: FormConfig = {
-        id: crypto.randomUUID(),
+        id: initialForm ? initialForm.id : crypto.randomUUID(),
         name: formName.trim() || 'Save Links',
         icon: formIcon,
         destinationType: selectedDestination.type,
@@ -283,7 +314,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         pageSaveMode: selectedDestination.type === 'page' ? pageSaveMode : undefined,
         clipContent: clipAction === 'article',
         mappings,
-        createdAt: Date.now(),
+        createdAt: initialForm ? initialForm.createdAt : Date.now(),
       };
 
       await saveForm(newForm);
@@ -544,7 +575,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         >
           <ChevronDown className="w-4 h-4" />
         </button>
-        <h1 className="font-bold text-sm text-gray-900 tracking-tight">Create Form</h1>
+        <h1 className="font-bold text-sm text-gray-900 tracking-tight">{initialForm ? 'Edit Form' : 'Create Form'}</h1>
         <button
           type="button"
           onClick={() => {}}
@@ -932,10 +963,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
             {submitting ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Saving Form...</span>
+                <span>{initialForm ? 'Salvando Alterações...' : 'Saving Form...'}</span>
               </>
             ) : (
-              <span>Save Form</span>
+              <span>{initialForm ? 'Salvar Alterações' : 'Save Form'}</span>
             )}
           </button>
         </div>

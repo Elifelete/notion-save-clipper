@@ -12,12 +12,13 @@ export default function App() {
   const [apiKey, setApiKey] = useState<string>('');
   const [forms, setForms] = useState<FormConfig[]>([]);
   const [selectedFormId, setSelectedFormIdState] = useState<string>('');
+  const [editingForm, setEditingForm] = useState<FormConfig | null>(null);
   const [metadata, setMetadata] = useState<ExtractedMetadata | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Telas: 'select_form' (Home estilo Save.to), 'save' (Save to Notion), 'create_form', 'settings'
   const [currentView, setCurrentView] = useState<'select_form' | 'save' | 'settings' | 'create_form'>('save');
-  const [previousView, setPreviousView] = useState<'select_form' | 'save' | 'create_form'>('save');
+  const [previousView, setPreviousView] = useState<'select_form' | 'save' | 'create_form' | 'settings'>('save');
   const [justCreatedFormName, setJustCreatedFormName] = useState<string | null>(null);
 
   const loadInitialData = async () => {
@@ -35,6 +36,7 @@ export default function App() {
       if (!storedKey) {
         setCurrentView('settings');
       } else if (storedForms.length === 0) {
+        setEditingForm(null);
         setCurrentView('create_form');
       } else {
         const activeId =
@@ -98,19 +100,58 @@ export default function App() {
     const updatedForms = await getForms();
     setForms(updatedForms);
     if (updatedForms.length === 0) {
+      setEditingForm(null);
       setCurrentView('create_form');
     } else {
       setCurrentView(previousView);
     }
   };
 
-  const handleFormCreated = async (newForm: FormConfig) => {
+  const handleOpenCreateForm = () => {
+    setEditingForm(null);
+    if (currentView !== 'create_form') {
+      setPreviousView(currentView as any);
+    }
+    setCurrentView('create_form');
+  };
+
+  const handleEditForm = (formToEdit: FormConfig) => {
+    setEditingForm(formToEdit);
+    if (currentView !== 'create_form') {
+      setPreviousView(currentView as any);
+    }
+    setCurrentView('create_form');
+  };
+
+  const handleFormSaved = async (savedForm: FormConfig) => {
     const updatedForms = await getForms();
     setForms(updatedForms);
-    setSelectedFormIdState(newForm.id);
-    await setDefaultFormId(newForm.id);
-    setJustCreatedFormName(newForm.name);
-    setCurrentView('select_form');
+    setSelectedFormIdState(savedForm.id);
+    await setDefaultFormId(savedForm.id);
+    const wasEditing = !!editingForm;
+    setEditingForm(null);
+
+    if (wasEditing) {
+      if (previousView === 'settings') {
+        setCurrentView('settings');
+      } else {
+        setCurrentView('save');
+      }
+    } else {
+      setJustCreatedFormName(savedForm.name);
+      setCurrentView('select_form');
+    }
+  };
+
+  const handleCancelCreateOrEdit = () => {
+    setEditingForm(null);
+    if (previousView === 'settings') {
+      setCurrentView('settings');
+    } else if (forms.length > 0) {
+      setCurrentView(previousView || 'save');
+    } else {
+      setCurrentView('settings');
+    }
   };
 
   if (loading) {
@@ -131,7 +172,7 @@ export default function App() {
           <SelectFormView
             forms={forms}
             onSelectForm={handleSelectForm}
-            onOpenCreateForm={() => setCurrentView('create_form')}
+            onOpenCreateForm={handleOpenCreateForm}
             onOpenSettings={navigateToSettings}
             justCreatedFormName={justCreatedFormName}
             onDismissBanner={() => setJustCreatedFormName(null)}
@@ -147,12 +188,13 @@ export default function App() {
               metadata={metadata}
               onBackToSelectForm={() => setCurrentView('select_form')}
               onOpenSettings={navigateToSettings}
+              onEditForm={handleEditForm}
             />
           ) : (
             <div className="p-6 text-center space-y-3 bg-white flex flex-col items-center justify-center min-h-[300px]">
               <p className="text-gray-500 text-xs">Nenhum formulário ativo selecionado.</p>
               <button
-                onClick={() => setCurrentView('create_form')}
+                onClick={handleOpenCreateForm}
                 className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg cursor-pointer"
               >
                 Criar Formulário
@@ -161,15 +203,13 @@ export default function App() {
           )
         )}
 
-        {/* TELA 3: Create Form */}
+        {/* TELA 3: Create or Edit Form */}
         {currentView === 'create_form' && (
           <CreateFormView
             apiKey={apiKey}
-            onFormCreated={handleFormCreated}
-            onCancel={() => {
-              if (forms.length > 0) setCurrentView('select_form');
-              else setCurrentView('settings');
-            }}
+            initialForm={editingForm || undefined}
+            onFormCreated={handleFormSaved}
+            onCancel={handleCancelCreateOrEdit}
           />
         )}
 
@@ -177,7 +217,8 @@ export default function App() {
         {currentView === 'settings' && (
           <SettingsView
             onApiKeySaved={handleApiKeySaved}
-            onNavigateToCreateForm={() => setCurrentView('create_form')}
+            onNavigateToCreateForm={handleOpenCreateForm}
+            onEditForm={handleEditForm}
             onBack={
               forms.length > 0
                 ? () => setCurrentView(previousView)

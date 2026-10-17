@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   X,
   Plus,
+  Pencil,
 } from 'lucide-react';
 import { getApiKey, setApiKey, getForms, deleteForm } from '../services/storage';
 import { validateNotionApiKey } from '../services/notion';
@@ -18,12 +19,14 @@ import type { FormConfig } from '../types';
 interface SettingsViewProps {
   onApiKeySaved: () => void;
   onNavigateToCreateForm: () => void;
+  onEditForm?: (form: FormConfig) => void;
   onBack?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   onApiKeySaved,
   onNavigateToCreateForm,
+  onEditForm,
   onBack,
 }) => {
   const [keyInput, setKeyInput] = useState('');
@@ -242,13 +245,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteForm(form.id)}
-                    className="p-1 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                    title="Excluir formulário"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {onEditForm && (
+                      <button
+                        type="button"
+                        onClick={() => onEditForm(form)}
+                        className="p-1 text-gray-400 hover:text-blue-600 hover:bg-gray-200/60 rounded transition-colors cursor-pointer"
+                        title="Editar formulário"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteForm(form.id)}
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-gray-200/60 rounded transition-colors cursor-pointer"
+                      title="Excluir formulário"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

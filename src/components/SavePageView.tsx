@@ -34,6 +34,7 @@ interface SavePageViewProps {
   metadata: ExtractedMetadata;
   onBackToSelectForm: () => void;
   onOpenSettings: () => void;
+  onEditForm?: (form: FormConfig) => void;
 }
 
 export const SavePageView: React.FC<SavePageViewProps> = ({
@@ -42,6 +43,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   metadata,
   onBackToSelectForm,
   onOpenSettings,
+  onEditForm,
 }) => {
   const [title, setTitle] = useState(metadata.title || '');
   const [url, setUrl] = useState(metadata.url || '');
@@ -368,7 +370,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           </a>
           <button
             type="button"
-            onClick={onOpenSettings}
+            onClick={onEditForm ? () => onEditForm(form) : onOpenSettings}
             title="Configurações do Formulário"
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
           >
