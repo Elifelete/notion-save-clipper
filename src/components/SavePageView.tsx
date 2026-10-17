@@ -20,9 +20,12 @@ import {
   AlignLeft,
   Link2,
   Image as ImageIcon,
+  Camera,
+  AlertTriangle,
+  Highlighter,
 } from 'lucide-react';
 import type { FormConfig, ExtractedMetadata } from '../types';
-import { createPage } from '../services/notion';
+import { createPage, findExistingPageByUrl } from '../services/notion';
 import { getActiveTabArticle, detectSpecialPage, type ArticleParsedContent } from '../services/reader';
 import { CoverImagePicker } from './CoverImagePicker';
 import { PropertyField } from './PropertyField';
@@ -69,6 +72,16 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   const [savedPageInfo, setSavedPageInfo] = useState<{ id: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Fase 4: Detecção de página já salva (Anti-duplicidade)
+  const [existingPage, setExistingPage] = useState<{ id: string; url: string; title: string } | null>(null);
+  const [checkingExisting, setCheckingExisting] = useState(false);
+
+  // Fase 4: Captura de tela ativa (Screenshot)
+  const [capturingScreenshot, setCapturingScreenshot] = useState(false);
+
+  // Fase 4: Trecho selecionado / Highlighter
+  const [selectedHighlight, setSelectedHighlight] = useState<string>(metadata.selectedText || '');
+
   const handleOptionsUpdate = async (propertyId: string, newOptions: NotionPropertyOption[]) => {
     try {
       const updatedMappings = (form.mappings || []).map((m) =>
@@ -80,6 +93,54 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
       console.warn("Falha ao persistir opções no formulário:", err);
     }
   };
+
+  // Escuta mensagem de seleção do content script (Highlighter flutuante)
+  useEffect(() => {
+    const handleMsg = (event: MessageEvent) => {
+      if (event.data?.action === 'NOTION_SAVE_SET_SELECTION' && event.data.selectedText) {
+        const text = String(event.data.selectedText).trim();
+        setSelectedHighlight(text);
+        setDescription((prev) => (prev ? prev + '\n\n"' + text + '"' : '"' + text + '"'));
+        setClipAction('selection');
+      }
+    };
+
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, []);
+
+  // Verifica se o link já foi salvo (se a opção detectExisting estiver ativa no formulário)
+  useEffect(() => {
+    if (form.detectExisting === false) return;
+    if (!url || !url.startsWith('http')) return;
+
+    let isMounted = true;
+    async function checkDuplicate() {
+      try {
+        setCheckingExisting(true);
+        const match = await findExistingPageByUrl(
+          apiKey,
+          form.databaseId,
+          form.destinationType || 'database',
+          url
+        );
+        if (isMounted) {
+          setExistingPage(match);
+        }
+      } catch (err) {
+        console.warn('Erro ao checar duplicidade:', err);
+      } finally {
+        if (isMounted) {
+          setCheckingExisting(false);
+        }
+      }
+    }
+
+    checkDuplicate();
+    return () => {
+      isMounted = false;
+    };
+  }, [url, form.databaseId, form.destinationType, form.detectExisting, apiKey]);
 
   const specialType = detectSpecialPage(url);
   const draftKey = `notion_save_draft_${form.id}_${metadata.url || url}`;
@@ -173,6 +234,28 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     }));
   };
 
+  const handleCaptureScreenshot = async () => {
+    setCapturingScreenshot(true);
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.sendMessage({ action: 'CAPTURE_VISIBLE_TAB' }, (response) => {
+          setCapturingScreenshot(false);
+          if (response?.success && response.dataUrl) {
+            setCoverUrl(response.dataUrl);
+          } else {
+            setError(response?.error || 'Não foi possível capturar a tela ativa.');
+          }
+        });
+      } else {
+        setCapturingScreenshot(false);
+        setError('Captura de tela disponível apenas no navegador Chrome.');
+      }
+    } catch (e: any) {
+      setCapturingScreenshot(false);
+      setError(e.message || 'Erro ao capturar tela.');
+    }
+  };
+
   const handleClose = () => {
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ action: 'NOTION_SAVE_CLOSE' }, '*');
@@ -249,6 +332,36 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         }
       } else if (clipAction === 'content' && articleData && articleData.blocks.length > 0) {
         contentBlocks.push(...articleData.blocks);
+      } else if (clipAction === 'selection' && selectedHighlight) {
+        if (url) {
+          contentBlocks.push({
+            object: 'block',
+            type: 'bookmark',
+            bookmark: { url },
+          });
+        }
+        contentBlocks.push({
+          object: 'block',
+          type: 'quote',
+          quote: {
+            rich_text: [
+              {
+                type: 'text',
+                text: { content: selectedHighlight },
+                annotations: { italic: true },
+              },
+            ],
+          },
+        });
+        if (description && description !== selectedHighlight && !hasDescriptionPropertyInDatabase) {
+          contentBlocks.push({
+            object: 'block',
+            type: 'paragraph',
+            paragraph: {
+              rich_text: [{ type: 'text', text: { content: description } }],
+            },
+          });
+        }
       } else {
         if (url) {
           contentBlocks.push({
@@ -379,6 +492,52 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         </div>
       </div>
 
+      {/* Banner de Alerta: Página Já Salva (Anti-Duplicidade) */}
+      {existingPage && (
+        <div className="mx-3.5 mt-2.5 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start justify-between gap-2 text-xs text-amber-900 shadow-2xs animate-fadeIn">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-[11px] text-amber-800">Este link já foi salvo anteriormente!</div>
+              <div className="text-[11px] text-amber-700 truncate max-w-[210px] mt-0.5">
+                "{existingPage.title}"
+              </div>
+            </div>
+          </div>
+          <a
+            href={existingPage.url}
+            target="_blank"
+            rel="noreferrer"
+            className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-md font-semibold text-[10px] shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Ver</span>
+            <ExternalLink className="w-2.5 h-2.5" />
+          </a>
+        </div>
+      )}
+
+      {/* Banner de Trecho Destacado (Highlighter) */}
+      {selectedHighlight && clipAction === 'selection' && (
+        <div className="mx-3.5 mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between text-xs text-blue-900 shadow-2xs">
+          <div className="flex items-center gap-1.5 truncate">
+            <Highlighter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="text-[11px] text-blue-800 font-medium truncate">
+              Trecho selecionado capturado
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedHighlight('');
+              setClipAction(form.clipContent ? 'content' : 'bookmark');
+            }}
+            className="text-[10px] text-blue-600 hover:text-blue-800 underline cursor-pointer"
+          >
+            Limpar
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSave} className="p-3.5 space-y-3 flex-1 flex flex-col justify-between">
         <div className="space-y-3">
           {/* Campo 1: Name * (Aa Name *) */}
@@ -438,6 +597,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                   <div
                     onClick={() => setIsCoverPickerOpen(true)}
                     className="w-12 h-12 rounded-lg border border-gray-200 bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer overflow-hidden transition-colors shadow-2xs group relative"
+                    title="Escolher imagem da página"
                   >
                     {coverUrl ? (
                       <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
@@ -445,15 +605,31 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                       <Plus className="w-5 h-5 text-gray-400 group-hover:text-gray-600" />
                     )}
                   </div>
-                  {coverUrl && (
+                  <div className="flex flex-col gap-1">
                     <button
                       type="button"
-                      onClick={() => setCoverUrl(undefined)}
-                      className="text-[10px] text-gray-400 hover:text-red-500 underline cursor-pointer"
+                      onClick={handleCaptureScreenshot}
+                      disabled={capturingScreenshot}
+                      className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-md text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                      title="Tirar print da tela visível e usar como cover"
                     >
-                      Remover Imagem
+                      {capturingScreenshot ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                      ) : (
+                        <Camera className="w-3 h-3 text-gray-500" />
+                      )}
+                      <span>{capturingScreenshot ? 'Capturando...' : 'Capturar Screenshot'}</span>
                     </button>
-                  )}
+                    {coverUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setCoverUrl(undefined)}
+                        className="text-[10px] text-gray-400 hover:text-red-500 underline cursor-pointer text-left"
+                      >
+                        Remover Imagem
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

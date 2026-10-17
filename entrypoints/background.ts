@@ -1,4 +1,22 @@
 export default defineBackground(() => {
+  // Escuta mensagens para captura de tela (Screenshot da aba ativa)
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request?.action === 'CAPTURE_VISIBLE_TAB') {
+      chrome.tabs.captureVisibleTab(
+        sender.tab?.windowId ?? chrome.windows.WINDOW_ID_CURRENT,
+        { format: 'png' },
+        (dataUrl) => {
+          if (chrome.runtime.lastError || !dataUrl) {
+            sendResponse({ success: false, error: chrome.runtime.lastError?.message || 'Falha ao capturar tela' });
+          } else {
+            sendResponse({ success: true, dataUrl });
+          }
+        }
+      );
+      return true;
+    }
+  });
+
   // Desativa o popup nativo do navegador para permitir o modal fixo injetado na página (estilo Save.to)
   const disableNativePopup = () => {
     try {

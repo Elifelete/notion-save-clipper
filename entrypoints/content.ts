@@ -88,6 +88,117 @@ export default defineContentScript({
         const targetHeight = Math.min(Math.max(event.data.height, 220), window.innerHeight - 32);
         iframe.style.height = `${targetHeight}px`;
       }
+
+    // --- HIGHLIGHTER & FLOATING TOOLBAR ---
+    const HIGHLIGHT_BUTTON_ID = "notion-save-highlight-btn";
+    let activeHighlightBtn: HTMLDivElement | null = null;
+
+    function removeHighlightButton() {
+      if (activeHighlightBtn && activeHighlightBtn.parentNode) {
+        activeHighlightBtn.parentNode.removeChild(activeHighlightBtn);
+      }
+      activeHighlightBtn = null;
+    }
+
+    document.addEventListener("mouseup", (e) => {
+      // Se clicou dentro do iframe ou do botão de highlight, não faz nada
+      const target = e.target as HTMLElement | null;
+      if (target?.closest && (target.closest(`#${IFRAME_ID}`) || target.closest(`#${HIGHLIGHT_BUTTON_ID}`))) {
+        return;
+      }
+
+      setTimeout(() => {
+        const selection = window.getSelection();
+        const selectedText = selection ? selection.toString().trim() : "";
+
+        if (!selectedText || selectedText.length < 2) {
+          removeHighlightButton();
+          return;
+        }
+
+        const range = selection!.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (!rect || (rect.width === 0 && rect.height === 0)) {
+          removeHighlightButton();
+          return;
+        }
+
+        if (!activeHighlightBtn) {
+          activeHighlightBtn = document.createElement("div");
+          activeHighlightBtn.id = HIGHLIGHT_BUTTON_ID;
+          activeHighlightBtn.innerHTML = `
+            <button type="button" style="
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              padding: 6px 12px;
+              background: #111827;
+              color: #ffffff;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              font-size: 12px;
+              font-weight: 600;
+              border-radius: 9999px;
+              border: 1px solid rgba(255, 255, 255, 0.15);
+              box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+              cursor: pointer;
+              transition: transform 0.12s ease, background 0.12s ease;
+            ">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              <span>Salvar no Notion</span>
+            </button>
+          `;
+
+          activeHighlightBtn.style.cssText = `
+            position: absolute !important;
+            z-index: 2147483646 !important;
+            user-select: none !important;
+            pointer-events: auto !important;
+          `;
+
+          activeHighlightBtn.addEventListener("click", (evt) => {
+            evt.stopPropagation();
+            evt.preventDefault();
+
+            // Abre ou exibe o modal da extensão
+            toggleOverlay();
+
+            // Envia o texto destacado para o iframe preencher
+            const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
+            if (iframe && iframe.contentWindow) {
+              iframe.contentWindow.postMessage(
+                {
+                  action: "NOTION_SAVE_SET_SELECTION",
+                  selectedText,
+                },
+                "*"
+              );
+            }
+
+            removeHighlightButton();
+          });
+
+          document.body.appendChild(activeHighlightBtn);
+        }
+
+        // Posiciona o botão logo acima da seleção de texto
+        const top = window.scrollY + rect.top - 42;
+        const left = Math.max(10, window.scrollX + rect.left + rect.width / 2 - 60);
+
+        activeHighlightBtn.style.top = `${Math.max(10, top)}px`;
+        activeHighlightBtn.style.left = `${left}px`;
+        activeHighlightBtn.style.display = "block";
+      }, 20);
+    });
+
+    document.addEventListener("mousedown", (e) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest && (target.closest(`#${IFRAME_ID}`) || target.closest(`#${HIGHLIGHT_BUTTON_ID}`))) {
+        return;
+      }
+      removeHighlightButton();
+    });
     });
   },
 });

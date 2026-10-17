@@ -80,7 +80,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [formName, setFormName] = useState(initialForm?.name || '');
   const [formIcon, setFormIcon] = useState(initialForm?.icon || '🔖');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [detectExisting, setDetectExisting] = useState(false);
+  const [detectExisting, setDetectExisting] = useState(initialForm?.detectExisting ?? true);
   const [clipAction, setClipAction] = useState<'bookmark' | 'article'>(
     initialForm?.clipContent ? 'article' : 'bookmark'
   );
@@ -345,6 +345,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         databaseTitle: selectedDestination.title,
         destinationUrl: selectedDestination.url,
         pageSaveMode: selectedDestination.type === 'page' ? pageSaveMode : undefined,
+        detectExisting,
         clipContent: clipAction === 'article',
         mappings,
         createdAt: initialForm ? initialForm.createdAt : Date.now(),

@@ -44,6 +44,8 @@ export function extractPageMetadataScript(): ExtractedMetadata {
   const publishedDate = getMeta(['article:published_time', 'date', 'pubdate']) || '';
   const siteName = getMeta(['og:site_name']) || window.location.hostname;
 
+  const selection = window.getSelection() ? window.getSelection()!.toString().trim() : "";
+
   return {
     title,
     url: window.location.href,
@@ -53,6 +55,7 @@ export function extractPageMetadataScript(): ExtractedMetadata {
     author: author || undefined,
     publishedDate: publishedDate || undefined,
     siteName: siteName || undefined,
+    selectedText: selection || undefined,
   };
 }
 

@@ -154,10 +154,10 @@ graph TD
 - [x] Suporte a chunking/paginação para artigos longos (+100 blocos) via lotes da Notion API.
 - [x] Indicador de tempo de leitura e contagem de palavras com toggle rápido no popup.
 
-### Fase 4: Highlighter & Polish (Próxima)
-- [ ] Ferramenta de Highlighter para marcar textos na página web e salvar trechos.
-- [ ] Captura de screenshot da tela ativa (`chrome.tabs.captureVisibleTab`).
-- [ ] Detecção de links já salvos para evitar duplicidade.
+### Fase 4: Highlighter & Polish (Concluído)
+- [x] Ferramenta de Highlighter para marcar textos na página web e salvar trechos destacados (botão flutuante contextual "Salvar no Notion" + captura automática em citação).
+- [x] Captura de screenshot da tela ativa (`chrome.tabs.captureVisibleTab`) diretamente no campo de capa com botão "Capturar Screenshot".
+- [x] Detecção de links já salvos (Anti-Duplicidade) com banner de alerta em tempo real e link direto para abrir a página existente no Notion.
 
 ### Fase 5: Backend Cloudflare Workers & Notion OAuth 2.0 (Zero-Config)
 - [ ] Criação do Cloudflare Worker para troca segura do authorization code OAuth 2.0 do Notion.

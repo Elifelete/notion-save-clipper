@@ -83,6 +83,7 @@ export interface FormConfig {
   databaseTitle: string;                  // Nome da database ou da página de destino
   destinationUrl?: string;                // Link direto no Notion
   pageSaveMode?: PageSaveMode;            // 'subpage' ou 'append_block' (usado quando destinationType === 'page')
+  detectExisting?: boolean;               // Verifica se a URL já existe no destino do Notion
   clipContent: boolean;                   // true = extrai corpo do artigo, false = bookmark simples
   mappings: PropertyFieldMapping[];
   createdAt: number;
@@ -98,4 +99,5 @@ export interface ExtractedMetadata {
   publishedDate?: string;
   siteName?: string;
   rawText?: string;
+  selectedText?: string;
 }

@@ -701,3 +701,102 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
     url: response.url,
   };
 }
+
+/**
+ * Verifica se já existe uma página cadastrada com a URL informada na Database ou destino
+ */
+export async function findExistingPageByUrl(
+  apiKey: string,
+  destinationId: string,
+  destinationType: NotionDestinationType,
+  urlToSearch: string
+): Promise<{ id: string; url: string; title: string } | null> {
+  const cleanUrl = urlToSearch.trim();
+  if (!cleanUrl) return null;
+
+  try {
+    if (destinationType === 'database') {
+      // 1. Tenta buscar filtrando diretamente pela propriedade da URL na database
+      const db = await getDatabaseSchema(apiKey, destinationId);
+      const urlProp = Object.values(db.properties || {}).find((p) => p.type === 'url');
+
+      if (urlProp) {
+        const queryRes = await notionRequest<{ results: any[] }>(
+          apiKey,
+          `/databases/${destinationId}/query`,
+          {
+            method: 'POST',
+            body: {
+              filter: {
+                property: urlProp.name,
+                url: {
+                  equals: cleanUrl,
+                },
+              },
+              page_size: 1,
+            },
+          }
+        );
+
+        if (queryRes.results && queryRes.results.length > 0) {
+          const item = queryRes.results[0];
+          let title = 'Item existente';
+          if (item.properties) {
+            for (const prop of Object.values<any>(item.properties)) {
+              if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
+                title = prop.title.map((t: any) => t.plain_text).join('');
+                break;
+              }
+            }
+          }
+          return {
+            id: item.id,
+            url: item.url || `https://notion.so/${item.id.replace(/-/g, '')}`,
+            title,
+          };
+        }
+      }
+    }
+
+    // 2. Fallback: Busca via /search pelo texto da URL
+    const searchRes = await notionRequest<{ results: any[] }>(apiKey, '/search', {
+      method: 'POST',
+      body: {
+        query: cleanUrl,
+        page_size: 10,
+      },
+    });
+
+    if (searchRes.results && searchRes.results.length > 0) {
+      // Procura se algum item corresponde ao parent destino
+      const match = searchRes.results.find((item) => {
+        const parentId = item.parent?.database_id || item.parent?.page_id || item.parent?.block_id;
+        const normalizedParent = parentId ? parentId.replace(/-/g, '') : '';
+        const normalizedDest = destinationId.replace(/-/g, '');
+        return normalizedParent === normalizedDest;
+      });
+
+      if (match) {
+        let title = 'Página já salva';
+        if (match.properties) {
+          for (const prop of Object.values<any>(match.properties)) {
+            if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
+              title = prop.title.map((t: any) => t.plain_text).join('');
+              break;
+            }
+          }
+        }
+        return {
+          id: match.id,
+          url: match.url || `https://notion.so/${match.id.replace(/-/g, '')}`,
+          title,
+        };
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Erro ao verificar duplicidade de página:', err);
+    return null;
+  }
+}
