@@ -1,7 +1,7 @@
 {
   "name": "notion-save-clipper",
   "displayName": "Notion Save - Web Clipper",
-  "description": "Extensão para salvar páginas, artigos e metadados no Notion no estilo Save.to",
+  "description": "Web clipper extension for saving pages, articles, and metadata to Notion",
   "private": true,
   "version": "1.0.0",
   "type": "module",
