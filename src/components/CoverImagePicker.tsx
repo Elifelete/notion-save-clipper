@@ -4,14 +4,30 @@ import { getActiveTabImages } from '../services/extractor';
 
 interface CoverImagePickerProps {
   coverUrl?: string;
+  currentCover?: string;
+  isOpen?: boolean;
+  onClose?: () => void;
   onSelectCover: (url?: string) => void;
 }
 
 export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
   coverUrl,
+  currentCover,
+  isOpen: externalIsOpen,
+  onClose,
   onSelectCover,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const effectiveCover = currentCover !== undefined ? currentCover : coverUrl;
+
+  const setIsOpen = (val: boolean) => {
+    if (!val && onClose) {
+      onClose();
+    }
+    setInternalIsOpen(val);
+  };
+
   const [pageImages, setPageImages] = useState<string[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
@@ -28,7 +44,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
           setLoadingImages(false);
         });
     }
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, pageImages.length]);
 
   const handleApplyCustomUrl = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,51 +57,53 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
 
   return (
     <div>
-      {/* Visualização da Capa Atual */}
-      {coverUrl ? (
-        <div className="relative group rounded-lg overflow-hidden h-28 border border-gray-200 bg-gray-100 shadow-xs">
-          <img
-            src={coverUrl}
-            alt="Capa"
-            className="w-full h-full object-cover"
-            onError={() => onSelectCover(undefined)}
-          />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsOpen(true)}
-              className="py-1 px-2 bg-white/90 hover:bg-white text-gray-800 rounded text-[11px] font-medium shadow-xs cursor-pointer"
-            >
-              Trocar Capa
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectCover(undefined)}
-              className="py-1 px-2 bg-red-600/90 hover:bg-red-600 text-white rounded text-[11px] font-medium shadow-xs cursor-pointer"
-            >
-              Remover
-            </button>
+      {/* Visualização da Capa Atual (se não estiver controlado externamente) */}
+      {externalIsOpen === undefined && (
+        effectiveCover ? (
+          <div className="relative group rounded-lg overflow-hidden h-28 border border-gray-200 bg-gray-100 shadow-xs">
+            <img
+              src={effectiveCover}
+              alt="Capa"
+              className="w-full h-full object-cover"
+              onError={() => onSelectCover(undefined)}
+            />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsOpen(true)}
+                className="py-1 px-2 bg-white/90 hover:bg-white text-gray-800 rounded text-[11px] font-medium shadow-xs cursor-pointer"
+              >
+                Trocar Capa
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectCover(undefined)}
+                className="py-1 px-2 bg-red-600/90 hover:bg-red-600 text-white rounded text-[11px] font-medium shadow-xs cursor-pointer"
+              >
+                Remover
+              </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          className="w-full py-2 px-3 border border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50/30 rounded-lg text-gray-500 hover:text-blue-600 flex items-center justify-center gap-1.5 transition-all cursor-pointer text-[11px] font-medium"
-        >
-          <ImageIcon className="w-3.5 h-3.5" />
-          <span>+ Adicionar Capa</span>
-        </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsOpen(true)}
+            className="w-full h-20 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-blue-600 transition-colors bg-white/50 cursor-pointer"
+          >
+            <ImageIcon className="w-5 h-5 text-gray-400" />
+            <span className="text-xs font-medium">Adicionar Imagem de Capa</span>
+          </button>
+        )
       )}
 
-      {/* Modal / Seletor Visual de Imagens */}
+      {/* Modal / Dialog de Seleção de Capa */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-2 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm max-h-[85vh] flex flex-col overflow-hidden text-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
             {/* Header */}
-            <div className="flex items-center justify-between p-3 border-b border-gray-100">
-              <div className="flex items-center gap-1.5 font-semibold text-gray-900">
-                <ImageIcon className="w-4 h-4 text-blue-600" />
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
+              <div className="flex items-center gap-1.5 font-semibold text-gray-900 text-xs">
+                <Sparkles className="w-4 h-4 text-blue-600" />
                 <span>Escolher Imagem de Capa</span>
               </div>
               <button
@@ -139,75 +157,80 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
                       onClick={() => setActiveTab('url')}
                       className="text-blue-600 hover:underline font-medium"
                     >
-                      Inserir link de imagem manualmente
+                      Inserir link personalizado
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2">
-                    {pageImages.map((src, idx) => {
-                      const isSelected = coverUrl === src;
-                      return (
-                        <div
-                          key={idx}
-                          onClick={() => {
-                            onSelectCover(src);
-                            setIsOpen(false);
-                          }}
-                          className={`relative aspect-video rounded-md overflow-hidden border cursor-pointer group bg-gray-100 transition-all ${
-                            isSelected
-                              ? 'border-blue-600 ring-2 ring-blue-500/20 shadow-xs'
-                              : 'border-gray-200 hover:border-blue-400'
-                          }`}
-                        >
-                          <img
-                            src={src}
-                            alt={`Imagem ${idx + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                            loading="lazy"
-                          />
-                          {isSelected && (
-                            <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
-                              <span className="bg-blue-600 text-white p-1 rounded-full shadow-xs">
-                                <Check className="w-3 h-3" />
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="grid grid-cols-2 gap-2">
+                    {pageImages.map((src, i) => (
+                      <div
+                        key={i}
+                        onClick={() => {
+                          onSelectCover(src);
+                          setIsOpen(false);
+                        }}
+                        className={`group relative h-24 rounded-lg overflow-hidden border cursor-pointer transition-all ${
+                          effectiveCover === src
+                            ? 'border-blue-600 ring-2 ring-blue-500/30'
+                            : 'border-gray-200 hover:border-gray-400'
+                        }`}
+                      >
+                        <img src={src} alt="" className="w-full h-full object-cover" />
+                        {effectiveCover === src && (
+                          <div className="absolute top-1 right-1 bg-blue-600 text-white rounded-full p-0.5">
+                            <Check className="w-3 h-3" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )
               ) : (
                 <form onSubmit={handleApplyCustomUrl} className="space-y-3 py-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                      URL da Imagem
-                    </label>
-                    <input
-                      type="url"
-                      value={customUrl}
-                      onChange={(e) => setCustomUrl(e.target.value)}
-                      placeholder="https://exemplo.com/imagem.jpg"
-                      className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      required
-                    />
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-gray-700">Link direto da imagem (URL):</label>
+                    <div className="relative">
+                      <Link className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
+                      <input
+                        type="url"
+                        required
+                        value={customUrl}
+                        onChange={(e) => setCustomUrl(e.target.value)}
+                        placeholder="https://images.unsplash.com/..."
+                        className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
                   <button
                     type="submit"
-                    className="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md cursor-pointer transition-colors shadow-xs"
+                    className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                   >
-                    Definir como Capa
+                    Usar Imagem
                   </button>
                 </form>
               )}
             </div>
 
-            {/* Rodapé */}
-            <div className="p-2.5 bg-gray-50 border-t border-gray-100 flex justify-end">
+            {/* Footer */}
+            <div className="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 text-xs">
+              {effectiveCover ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectCover(undefined);
+                    setIsOpen(false);
+                  }}
+                  className="text-red-500 hover:underline font-medium"
+                >
+                  Remover Capa
+                </button>
+              ) : (
+                <div />
+              )}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="py-1 px-3 bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-100 font-medium cursor-pointer text-[11px]"
+                className="py-1 px-3 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium cursor-pointer"
               >
                 Fechar
               </button>

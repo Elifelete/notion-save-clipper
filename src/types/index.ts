@@ -82,11 +82,21 @@ export interface FormConfig {
   databaseId: string;                     // ID da database ou da página de destino
   databaseTitle: string;                  // Nome da database ou da página de destino
   destinationUrl?: string;                // Link direto no Notion
+  destinationPath?: string;               // Caminho / rota da pasta no Notion (ex: "Workspace / ... / Projects")
+  showFullPath?: boolean;                 // Exibir estrutura do caminho da pasta na lista inicial
   pageSaveMode?: PageSaveMode;            // 'subpage' ou 'append_block' (usado quando destinationType === 'page')
   detectExisting?: boolean;               // Verifica se a URL já existe no destino do Notion
   clipContent: boolean;                   // true = extrai corpo do artigo, false = bookmark simples
   mappings: PropertyFieldMapping[];
   createdAt: number;
+}
+
+export interface SocialPostData {
+  platform: 'twitter' | 'instagram';
+  username: string;
+  postId: string;
+  postUrl: string;
+  caption: string;
 }
 
 export interface ExtractedMetadata {
@@ -100,4 +110,5 @@ export interface ExtractedMetadata {
   siteName?: string;
   rawText?: string;
   selectedText?: string;
+  socialPost?: SocialPostData;
 }

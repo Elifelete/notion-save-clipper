@@ -29,16 +29,20 @@ import {
   ToggleLeft,
   FileSpreadsheet,
   ExternalLink,
+  Copy,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import type { NotionDestination, FormConfig, PropertyFieldMapping, PageSaveMode, PropertyDataSource } from '../types';
 import { fetchDestinations, getDatabaseSchema, searchNotionByQuery } from '../services/notion';
-import { saveForm } from '../services/storage';
+import { saveForm, deleteForm } from '../services/storage';
 
 interface CreateFormViewProps {
   apiKey: string;
   initialForm?: FormConfig;
   onFormCreated: (form: FormConfig) => void;
   onCancel: () => void;
+  onDeleteForm?: (formId: string) => void;
 }
 
 const EMOJI_OPTIONS = ['🔖', '📚', '💡', '📌', '🎬', '🍳', '💼', '🚀', '⭐', '🧠', '📄', '📝'];
@@ -65,6 +69,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   initialForm,
   onFormCreated,
   onCancel,
+  onDeleteForm,
 }) => {
   // Passos: 'configure_form' (tela principal idêntica ao Save.to) ou 'select_location' (modal de escolher database/página)
   const [step, setStep] = useState<'configure_form' | 'select_location'>('configure_form');
@@ -81,6 +86,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [formIcon, setFormIcon] = useState(initialForm?.icon || '🔖');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [detectExisting, setDetectExisting] = useState(initialForm?.detectExisting ?? true);
+  const [showFullPath, setShowFullPath] = useState(initialForm?.showFullPath ?? false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [clipAction, setClipAction] = useState<'bookmark' | 'article'>(
     initialForm?.clipContent ? 'article' : 'bookmark'
   );
@@ -159,6 +168,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               icon: initialForm.icon || '📁',
               type: initialForm.destinationType,
               url: initialForm.destinationUrl,
+              path: initialForm.destinationPath,
             });
           }
           setFormName(initialForm.name);
@@ -279,6 +289,119 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     loadSchema();
   }, [apiKey, selectedDestination]);
 
+  // Reordena campos
+  const moveField = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= mappings.length || fromIndex === toIndex) return;
+    setMappings((prev) => {
+      const updated = [...prev];
+      const [movedItem] = updated.splice(fromIndex, 1);
+      if (movedItem) updated.splice(toIndex, 0, movedItem);
+      return updated;
+    });
+  };
+
+  // Ações do Menu "..." (Mais opções)
+  const handleDuplicateForm = async () => {
+    setIsMoreMenuOpen(false);
+    if (!selectedDestination) return;
+    try {
+      const duplicated: FormConfig = {
+        id: crypto.randomUUID(),
+        name: `${formName} (Cópia)`,
+        icon: formIcon,
+        destinationType: selectedDestination.type,
+        databaseId: selectedDestination.id,
+        databaseTitle: selectedDestination.title,
+        destinationUrl: selectedDestination.url,
+        destinationPath: selectedDestination.path || initialForm?.destinationPath,
+        showFullPath,
+        pageSaveMode: selectedDestination.type === 'page' ? pageSaveMode : undefined,
+        detectExisting,
+        clipContent: clipAction === 'article',
+        mappings: [...mappings],
+        createdAt: Date.now(),
+      };
+      await saveForm(duplicated);
+      onFormCreated(duplicated);
+    } catch (err: any) {
+      alert(`Erro ao duplicar: ${err.message}`);
+    }
+  };
+
+  const handleResetFields = () => {
+    setIsMoreMenuOpen(false);
+    if (!selectedDestination) return;
+
+    if (selectedDestination.type === 'database') {
+      const initialMappings: PropertyFieldMapping[] = [];
+      for (const [propName, prop] of Object.entries(databaseProperties) as [string, any][]) {
+        const pType = prop?.type;
+        const pId = prop?.id || propName;
+        const lowerName = propName.toLowerCase();
+
+        if (pType === 'title') {
+          initialMappings.push({
+            notionPropertyId: pId,
+            notionPropertyName: propName,
+            notionPropertyType: 'title',
+            source: 'page_title',
+            showInPopup: true,
+            required: true,
+          });
+        } else if (pType === 'url' || lowerName === 'url' || lowerName === 'link') {
+          initialMappings.push({
+            notionPropertyId: pId,
+            notionPropertyName: propName,
+            notionPropertyType: pType || 'url',
+            source: 'page_url',
+            showInPopup: true,
+          });
+        } else if (pType === 'multi_select' || pType === 'select') {
+          initialMappings.push({
+            notionPropertyId: pId,
+            notionPropertyName: propName,
+            notionPropertyType: pType,
+            options: prop?.options || prop?.multi_select?.options || prop?.select?.options || undefined,
+            source: 'manual',
+            showInPopup: true,
+          });
+        }
+      }
+      setMappings(initialMappings);
+    } else {
+      setMappings([
+        {
+          notionPropertyId: 'title',
+          notionPropertyName: 'Name',
+          notionPropertyType: 'title',
+          source: 'page_title',
+          showInPopup: true,
+          required: true,
+        },
+        {
+          notionPropertyId: 'url',
+          notionPropertyName: 'URL',
+          notionPropertyType: 'url',
+          source: 'page_url',
+          showInPopup: true,
+        },
+      ]);
+    }
+  };
+
+  const handleDeleteFormAction = async () => {
+    setIsMoreMenuOpen(false);
+    if (!initialForm) return;
+    if (window.confirm(`Deseja realmente excluir o formulário "${formName}"?`)) {
+      if (onDeleteForm) {
+        onDeleteForm(initialForm.id);
+      } else {
+        await deleteForm(initialForm.id);
+        onCancel();
+      }
+    }
+  };
+
   // Escolhe um novo local
   const handleSelectLocation = (dest: NotionDestination) => {
     setSelectedDestination(dest);
@@ -344,6 +467,8 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         databaseId: selectedDestination.id,
         databaseTitle: selectedDestination.title,
         destinationUrl: selectedDestination.url,
+        destinationPath: selectedDestination.path || initialForm?.destinationPath,
+        showFullPath,
         pageSaveMode: selectedDestination.type === 'page' ? pageSaveMode : undefined,
         detectExisting,
         clipContent: clipAction === 'article',
@@ -702,13 +827,58 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           <ChevronDown className="w-4 h-4" />
         </button>
         <h1 className="font-bold text-sm text-gray-900 tracking-tight">{initialForm ? 'Edit Form' : 'Create Form'}</h1>
-        <button
-          type="button"
-          onClick={() => {}}
-          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
-        >
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
+        
+        {/* Menu de Opções do Header (...) */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+            title="Mais Opções do Formulário"
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+
+          {isMoreMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-transparent"
+                onClick={() => setIsMoreMenuOpen(false)}
+              />
+              <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-52 space-y-0.5 text-xs animate-fadeIn">
+                <button
+                  type="button"
+                  onClick={handleDuplicateForm}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-blue-600 cursor-pointer transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Duplicar Formulário</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetFields}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-blue-600 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Redefinir Campos Padrões</span>
+                </button>
+                {initialForm && (
+                  <>
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      type="button"
+                      onClick={handleDeleteFormAction}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50 cursor-pointer transition-colors font-medium"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      <span>Excluir Formulário</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSaveForm} className="space-y-3">
@@ -829,6 +999,30 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               </button>
             </div>
 
+            {/* Linha 3b: Exibir caminho da pasta/database na lista inicial */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="pr-2">
+                <span className="font-semibold text-gray-700 text-xs">Exibir caminho da pasta</span>
+                <div className="text-[10px] text-gray-400 truncate max-w-[210px]">
+                  {selectedDestination?.path ? selectedDestination.path : 'Exibe a rota da pasta/database na lista inicial'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFullPath(!showFullPath)}
+                className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer shrink-0 ${
+                  showFullPath ? 'bg-blue-600' : 'bg-gray-300'
+                }`}
+                title={showFullPath ? 'Caminho completo ativado' : 'Caminho completo desativado'}
+              >
+                <div
+                  className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${
+                    showFullPath ? 'left-4.5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Linha 4: Clip Action */}
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-1 font-semibold text-gray-700 text-xs">
@@ -879,20 +1073,87 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                   Nenhum campo adicionado. Clique abaixo para adicionar propriedades.
                 </div>
               ) : (
-                visibleFields.map((mapping) => (
-                  <div
-                    key={mapping.notionPropertyId}
-                    className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50/70 transition-colors"
-                  >
-                    {/* Lado Esquerdo: Grip + Tipo + Nome da Propriedade */}
-                    <div className="flex items-center gap-2 truncate">
-                      <GripVertical className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-                      <div className="shrink-0">{renderPropertyIcon(mapping.notionPropertyType)}</div>
-                      <span className="font-semibold text-xs text-gray-800 truncate">
-                        {mapping.notionPropertyName}
-                        {mapping.required && <span className="text-gray-400 ml-0.5">*</span>}
-                      </span>
-                    </div>
+                visibleFields.map((mapping) => {
+                  const fullIndex = mappings.findIndex((m) => m.notionPropertyId === mapping.notionPropertyId);
+                  const isDragging = draggedIndex === fullIndex;
+                  const isDragOver = dragOverIndex === fullIndex;
+
+                  return (
+                    <div
+                      key={mapping.notionPropertyId}
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedIndex(fullIndex);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedIndex !== null && draggedIndex !== fullIndex) {
+                          setDragOverIndex(fullIndex);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverIndex === fullIndex) setDragOverIndex(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedIndex !== null && draggedIndex !== fullIndex) {
+                          moveField(draggedIndex, fullIndex);
+                        }
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      className={`flex items-center justify-between px-3 py-2.5 transition-all select-none ${
+                        isDragging ? 'opacity-35 bg-blue-50/60' : 'hover:bg-gray-50/70'
+                      } ${isDragOver ? 'border-t-2 border-blue-500 bg-blue-50/30' : ''}`}
+                    >
+                      {/* Lado Esquerdo: Grip com Setas Rápidas + Tipo + Nome da Propriedade */}
+                      <div className="flex items-center gap-2 truncate">
+                        <div className="flex items-center gap-0.5 group/grip shrink-0">
+                          <div
+                            className="p-1 -ml-1 text-gray-400 hover:text-blue-600 rounded cursor-grab active:cursor-grabbing transition-colors"
+                            title="Arraste para reordenar a ordem dos campos ou use as setas"
+                          >
+                            <GripVertical className="w-3.5 h-3.5 shrink-0" />
+                          </div>
+                          <div className="flex flex-col -space-y-1 opacity-0 group-hover/grip:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              disabled={fullIndex === 0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                moveField(fullIndex, fullIndex - 1);
+                              }}
+                              className="text-gray-400 hover:text-blue-600 disabled:opacity-0 p-0.5 rounded cursor-pointer"
+                              title="Subir posição"
+                            >
+                              <ChevronUp className="w-2.5 h-2.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={fullIndex === mappings.length - 1}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                moveField(fullIndex, fullIndex + 1);
+                              }}
+                              className="text-gray-400 hover:text-blue-600 disabled:opacity-0 p-0.5 rounded cursor-pointer"
+                              title="Descer posição"
+                            >
+                              <ChevronDown className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">{renderPropertyIcon(mapping.notionPropertyType)}</div>
+                        <span className="font-semibold text-xs text-gray-800 truncate">
+                          {mapping.notionPropertyName}
+                          {mapping.required && <span className="text-gray-400 ml-0.5">*</span>}
+                        </span>
+                      </div>
 
                     {/* Lado Direito: Seta + Source Pill */}
                     <div className="flex items-center gap-2 shrink-0">
@@ -952,7 +1213,8 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 

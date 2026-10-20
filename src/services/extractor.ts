@@ -1,4 +1,5 @@
-import type { ExtractedMetadata } from '../types';
+import type { ExtractedMetadata, SocialPostData } from '../types';
+import { extractTwitterTweet, extractInstagramPost } from './socialMedia';
 
 /**
  * Função injetada na página para coletar metadados do DOM
@@ -44,18 +45,47 @@ export function extractPageMetadataScript(): ExtractedMetadata {
   const publishedDate = getMeta(['article:published_time', 'date', 'pubdate']) || '';
   const siteName = getMeta(['og:site_name']) || window.location.hostname;
 
-  const selection = window.getSelection() ? window.getSelection()!.toString().trim() : "";
+  const selection = window.getSelection() ? window.getSelection()!.toString().trim() : '';
+
+  // Detecção especial para Twitter/X e Instagram
+  let socialPost: SocialPostData | undefined;
+  const host = window.location.hostname.toLowerCase();
+  if (host.includes('twitter.com') || host.includes('x.com')) {
+    const tweetEl = document.querySelector<HTMLElement>('article[data-testid="tweet"]');
+    if (tweetEl) {
+      socialPost = extractTwitterTweet(tweetEl) || undefined;
+    }
+  } else if (host.includes('instagram.com')) {
+    const postEl = document.querySelector<HTMLElement>('article') || document.body;
+    socialPost = extractInstagramPost(postEl) || undefined;
+  }
+
+  let finalTitle = title;
+  let finalDescription = description;
+  let finalAuthor = author;
+
+  if (socialPost) {
+    finalTitle =
+      socialPost.platform === 'twitter'
+        ? `Post de @${socialPost.username} no X`
+        : `Post de @${socialPost.username} no Instagram`;
+    if (socialPost.caption) {
+      finalDescription = socialPost.caption;
+    }
+    finalAuthor = `@${socialPost.username}`;
+  }
 
   return {
-    title,
-    url: window.location.href,
-    description,
+    title: finalTitle,
+    url: socialPost?.postUrl || window.location.href,
+    description: finalDescription,
     coverImage: coverImage || undefined,
     favicon: getFavicon(),
-    author: author || undefined,
+    author: finalAuthor || undefined,
     publishedDate: publishedDate || undefined,
     siteName: siteName || undefined,
     selectedText: selection || undefined,
+    socialPost,
   };
 }
 
@@ -168,7 +198,5 @@ export async function getActiveTabMetadata(): Promise<ExtractedMetadata> {
     coverImage: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=1200',
     favicon: 'https://notion.so/favicon.ico',
     author: 'Equipe de Produtividade',
-    publishedDate: new Date().toISOString().split('T')[0],
-    siteName: 'exemplo.com',
   };
 }

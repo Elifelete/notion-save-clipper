@@ -129,8 +129,8 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
                     <div className="font-bold text-xs text-gray-900 truncate group-hover:text-blue-600 transition-colors">
                       {form.name}
                     </div>
-                    <div className="text-[10px] text-gray-400 truncate">
-                      {form.databaseTitle}
+                    <div className="text-[10px] text-gray-400 truncate" title={form.showFullPath && form.destinationPath ? form.destinationPath : form.databaseTitle}>
+                      {form.showFullPath && form.destinationPath ? form.destinationPath : form.databaseTitle}
                     </div>
                   </div>
                 </button>

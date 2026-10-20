@@ -3,9 +3,9 @@ import { SettingsView } from '@/src/components/SettingsView';
 import { CreateFormView } from '@/src/components/CreateFormView';
 import { SavePageView } from '@/src/components/SavePageView';
 import { SelectFormView } from '@/src/components/SelectFormView';
-import { getApiKey, getForms, getDefaultFormId, setDefaultFormId } from '@/src/services/storage';
+import { getApiKey, getForms, getDefaultFormId, setDefaultFormId, deleteForm } from '@/src/services/storage';
 import { getActiveTabMetadata } from '@/src/services/extractor';
-import type { FormConfig, ExtractedMetadata } from '@/src/types';
+import type { FormConfig, ExtractedMetadata, SocialPostData } from '@/src/types';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -53,6 +53,35 @@ export default function App() {
 
   useEffect(() => {
     loadInitialData();
+  }, []);
+
+  // Notifica o host sobre carregamento e escuta postMessage com dados de posts sociais
+  useEffect(() => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ action: 'NOTION_SAVE_POPUP_READY' }, '*');
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.action === 'NOTION_SAVE_SET_SOCIAL_POST' && event.data.post) {
+        const post = event.data.post as SocialPostData;
+        setMetadata((prev) => ({
+          title:
+            post.platform === 'twitter'
+              ? `Post de @${post.username} no X`
+              : `Post de @${post.username} no Instagram`,
+          url: post.postUrl,
+          description: post.caption,
+          author: `@${post.username}`,
+          coverImage: prev?.coverImage,
+          favicon: prev?.favicon,
+          socialPost: post,
+        }));
+        setCurrentView('save');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   // Notifica dinamicamente a página hospedeira sobre a altura necessária do iframe (elimina espaços em branco e barras de rolagem)
@@ -121,6 +150,19 @@ export default function App() {
       setPreviousView(currentView as any);
     }
     setCurrentView('create_form');
+  };
+
+  const handleDeleteFormFromCreate = async (formId: string) => {
+    await deleteForm(formId);
+    const updatedForms = await getForms();
+    setForms(updatedForms);
+    setEditingForm(null);
+    if (updatedForms.length > 0 && updatedForms[0]) {
+      setSelectedFormIdState(updatedForms[0].id);
+      setCurrentView('select_form');
+    } else {
+      setCurrentView('create_form');
+    }
   };
 
   const handleFormSaved = async (savedForm: FormConfig) => {
@@ -210,6 +252,7 @@ export default function App() {
             initialForm={editingForm || undefined}
             onFormCreated={handleFormSaved}
             onCancel={handleCancelCreateOrEdit}
+            onDeleteForm={handleDeleteFormFromCreate}
           />
         )}
 

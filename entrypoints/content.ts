@@ -1,20 +1,24 @@
 import { extractPageMetadataScript, extractPageImagesScript } from '@/src/services/extractor';
+import { initSocialMediaBadges, markBadgeSaved } from '@/src/services/socialMedia';
+import type { SocialPostData } from '@/src/types';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
   main() {
     const IFRAME_ID = 'notion-save-overlay-iframe';
 
-    function toggleOverlay() {
+    function toggleOverlay(forceOpen?: boolean): HTMLIFrameElement {
       let iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
 
       if (iframe) {
-        if (iframe.style.display === 'none') {
+        if (forceOpen) {
+          iframe.style.display = 'block';
+        } else if (iframe.style.display === 'none') {
           iframe.style.display = 'block';
         } else {
           iframe.style.display = 'none';
         }
-        return;
+        return iframe;
       }
 
       // Cria o iframe flutuante que permanece fixo na página
@@ -40,6 +44,7 @@ export default defineContentScript({
       `;
 
       document.documentElement.appendChild(iframe);
+      return iframe;
     }
 
     // Ouve mensagens enviadas pelo background ou iframe
@@ -118,6 +123,7 @@ export default defineContentScript({
         user-select: none !important;
         pointer-events: auto !important;
       `;
+
       selectorBadge.innerHTML = `
         <div style="
           background: #111827;
@@ -265,17 +271,36 @@ export default defineContentScript({
       }
     }
 
+    // --- INTEGRAÇÃO COM REDES SOCIAIS (TWITTER/X & INSTAGRAM) ---
+    let pendingSocialPost: SocialPostData | null = null;
+    let lastActiveSocialButton: HTMLElement | null = null;
+
+    function handleSocialPostClick(post: SocialPostData, buttonEl: HTMLElement) {
+      pendingSocialPost = post;
+      lastActiveSocialButton = buttonEl;
+
+      const iframe = toggleOverlay(true);
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(
+          {
+            action: 'NOTION_SAVE_SET_SOCIAL_POST',
+            post,
+          },
+          '*'
+        );
+      }
+    }
+
     // Escuta comandos disparados de dentro do iframe
     window.addEventListener('message', (event) => {
       const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
-      if (!iframe) return;
 
-      if (event.data?.action === 'NOTION_SAVE_CLOSE') {
+      if (event.data?.action === 'NOTION_SAVE_CLOSE' && iframe) {
         iframe.style.display = 'none';
         stopElementSelector();
       }
 
-      if (event.data?.action === 'NOTION_SAVE_RESIZE' && typeof event.data.height === 'number') {
+      if (event.data?.action === 'NOTION_SAVE_RESIZE' && iframe && typeof event.data.height === 'number') {
         const targetHeight = Math.min(Math.max(event.data.height, 220), window.innerHeight - 32);
         iframe.style.height = `${targetHeight}px`;
       }
@@ -286,6 +311,24 @@ export default defineContentScript({
 
       if (event.data?.action === 'NOTION_SAVE_STOP_ELEMENT_PICKER') {
         stopElementSelector();
+      }
+
+      if (event.data?.action === 'NOTION_SAVE_POPUP_READY') {
+        if (pendingSocialPost && iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage(
+            {
+              action: 'NOTION_SAVE_SET_SOCIAL_POST',
+              post: pendingSocialPost,
+            },
+            '*'
+          );
+        }
+      }
+
+      if (event.data?.action === 'NOTION_SAVE_POST_SAVED') {
+        if (lastActiveSocialButton) {
+          markBadgeSaved(lastActiveSocialButton);
+        }
       }
     });
 
@@ -363,7 +406,7 @@ export default defineContentScript({
             evt.preventDefault();
 
             // Abre ou exibe o modal da extensão
-            toggleOverlay();
+            toggleOverlay(true);
 
             // Envia o texto destacado para o iframe preencher
             const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
@@ -398,6 +441,11 @@ export default defineContentScript({
         return;
       }
       removeHighlightButton();
+    });
+
+    // Inicia os badges inteligentes nas redes sociais (Twitter/X e Instagram)
+    initSocialMediaBadges((post, btn) => {
+      handleSocialPostClick(post, btn);
     });
   },
 });

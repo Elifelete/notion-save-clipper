@@ -3,20 +3,19 @@ import { htmlToNotionBlocks } from './notionBlocks';
 
 export interface ArticleParsedContent {
   title: string;
-  byline?: string;
-  excerpt?: string;
-  textContent: string;
+  byline: string;
+  excerpt: string;
   htmlContent: string;
-  readingTimeMinutes: number;
+  textContent: string;
   wordCount: number;
-  blocks: any[];
-  isSpecialPage?: 'youtube' | 'github' | 'twitter' | null;
+  readingTimeMinutes: number;
+  blocks: any[]; // Blocos estruturados da Notion API v1
 }
 
 /**
  * Detecta se a URL pertence a serviços especiais com tratamento dedicado
  */
-export function detectSpecialPage(url: string): 'youtube' | 'github' | 'twitter' | null {
+export function detectSpecialPage(url: string): 'youtube' | 'github' | 'twitter' | 'instagram' | null {
   if (!url) return null;
   const lower = url.toLowerCase();
   if (lower.includes('youtube.com/watch') || lower.includes('youtu.be/')) {
@@ -27,6 +26,9 @@ export function detectSpecialPage(url: string): 'youtube' | 'github' | 'twitter'
   }
   if (lower.includes('twitter.com/') || lower.includes('x.com/')) {
     return 'twitter';
+  }
+  if (lower.includes('instagram.com/')) {
+    return 'instagram';
   }
   return null;
 }
@@ -94,7 +96,43 @@ export function extractArticleFromDom(): {
     };
   }
 
-  // 3. Artigo Padrão com Readability
+  // 3. Tratamento para Twitter / X
+  if (special === 'twitter') {
+    const tweetEl = document.querySelector('article[data-testid="tweet"]');
+    const textEl = tweetEl?.querySelector('[data-testid="tweetText"]');
+    const tweetText = textEl ? (textEl as HTMLElement).innerText.trim() : '';
+    const authorEl = tweetEl?.querySelector('[data-testid="User-Name"]');
+    const authorName = authorEl?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+    return {
+      title: document.title,
+      byline: authorName,
+      excerpt: tweetText.slice(0, 300),
+      htmlContent: `<p><strong>Post:</strong> ${tweetText}</p>`,
+      textContent: tweetText,
+      wordCount: tweetText.split(/\s+/).length,
+      readingTimeMinutes: 1,
+    };
+  }
+
+  // 4. Tratamento para Instagram
+  if (special === 'instagram') {
+    const postEl = document.querySelector('article') || document.body;
+    const h1Caption = postEl.querySelector('h1')?.textContent?.trim() || '';
+    const authorName = postEl.querySelector('header a[role="link"]')?.textContent?.trim() || '';
+
+    return {
+      title: document.title,
+      byline: authorName ? `@${authorName}` : '',
+      excerpt: h1Caption.slice(0, 300),
+      htmlContent: `<p>${h1Caption}</p>`,
+      textContent: h1Caption,
+      wordCount: h1Caption.split(/\s+/).length,
+      readingTimeMinutes: 1,
+    };
+  }
+
+  // 5. Artigo Padrão com Readability
   try {
     const docClone = document.cloneNode(true) as Document;
     const reader = new Readability(docClone);
@@ -128,18 +166,16 @@ export function extractArticleFromDom(): {
     byline: '',
     excerpt: '',
     htmlContent: `<p>${words.slice(0, 2000)}</p>`,
-    textContent: words,
-    wordCount: words.split(/\s+/).length,
+    textContent: fallbackText.slice(0, 2000),
+    wordCount: words.length,
     readingTimeMinutes: 1,
   };
 }
 
 /**
- * Extrai o artigo da aba ativa e converte para blocos do Notion prontos para salvar
+ * Extrai o artigo da aba ativa e converte o HTML diretamente para blocos estruturados da Notion API
  */
 export async function getActiveTabArticle(): Promise<ArticleParsedContent | null> {
-  let extracted: any = null;
-
   if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -150,67 +186,32 @@ export async function getActiveTabArticle(): Promise<ArticleParsedContent | null
         });
 
         if (results && results[0] && results[0].result) {
-          extracted = results[0].result;
+          const extracted = results[0].result as any;
+          const blocks = htmlToNotionBlocks(extracted.htmlContent);
+
+          return {
+            ...extracted,
+            blocks,
+          };
         }
       }
     } catch (e) {
-      console.warn('Falha ao rodar Readability na aba ativa:', e);
+      console.warn('Falha ao extrair artigo via Readability na aba ativa:', e);
     }
   }
 
-  if (!extracted) {
-    // Fallback de desenvolvimento local
-    return null;
-  }
-
-  const special = detectSpecialPage(extracted.title || '');
-  const blocks: any[] = [];
-
-  // Cabeçalho de metadados do artigo
-  if (extracted.byline) {
-    blocks.push({
-      object: 'block',
-      type: 'paragraph',
-      paragraph: {
-        rich_text: [
-          { type: 'text', text: { content: '✍️ Autor / Fonte: ' } },
-          { type: 'text', text: { content: extracted.byline }, annotations: { bold: true } },
-        ],
-      },
-    });
-  }
-
-  // Citação de resumo (excerpt)
-  if (extracted.excerpt) {
-    blocks.push({
-      object: 'block',
-      type: 'quote',
-      quote: {
-        rich_text: [{ type: 'text', text: { content: extracted.excerpt } }],
-      },
-    });
-  }
-
-  // Divisor visual
-  blocks.push({
-    object: 'block',
-    type: 'divider',
-    divider: {},
-  });
-
-  // Converte o corpo HTML em blocos do Notion
-  const bodyBlocks = htmlToNotionBlocks(extracted.htmlContent);
-  blocks.push(...bodyBlocks);
-
+  // Fallback mock para desenvolvimento local
   return {
-    title: extracted.title,
-    byline: extracted.byline,
-    excerpt: extracted.excerpt,
-    textContent: extracted.textContent,
-    htmlContent: extracted.htmlContent,
-    readingTimeMinutes: extracted.readingTimeMinutes,
-    wordCount: extracted.wordCount,
-    blocks,
-    isSpecialPage: special,
+    title: 'Segundo Cérebro: A Arte de Capturar Ideias',
+    byline: 'Tiago Forte',
+    excerpt: 'Descubra como organizar sua vida digital e potencializar sua produtividade usando o Notion.',
+    htmlContent:
+      '<h2>Por que capturar?</h2><p>Vivemos em um mar de informações. Salvar conteúdos ricos no Notion permite que você transforme consumo passivo em ação criativa.</p><blockquote>"Sua mente é para ter ideias, não para segurá-las."</blockquote>',
+    textContent: 'Por que capturar? Vivemos em um mar de informações...',
+    wordCount: 35,
+    readingTimeMinutes: 1,
+    blocks: htmlToNotionBlocks(
+      '<h2>Por que capturar?</h2><p>Vivemos em um mar de informações. Salvar conteúdos ricos no Notion permite que você transforme consumo passivo em ação criativa.</p><blockquote>"Sua mente é para ter ideias, não para segurá-las."</blockquote>'
+    ),
   };
 }
