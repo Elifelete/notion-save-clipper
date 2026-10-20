@@ -545,8 +545,8 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   return (
     <div className="flex flex-col min-h-[480px] w-full bg-[#f8f9fa] text-xs text-gray-800">
       {/* Top Header Save.to Style */}
-      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100 cursor-grab active:cursor-grabbing select-none">
-        <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
+      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100 cursor-grab active:cursor-grabbing select-none">
+        <span title="Drag to move" className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
         <div className="flex items-center gap-2 text-gray-500">
           <button
             type="button"
@@ -574,7 +574,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
       </div>
 
       {/* Form Navigation Bar: [<] [📛 Form Name] [🔗] [⚙️] */}
-      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between px-3 py-2 bg-white border-b border-gray-200 cursor-grab active:cursor-grabbing select-none">
+      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} className="flex items-center justify-between px-3 py-2 bg-white border-b border-gray-200 cursor-grab active:cursor-grabbing select-none">
         <button
           type="button"
           onClick={onBackToSelectForm}
@@ -584,7 +584,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           <ChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-1.5 font-bold text-sm text-gray-900 truncate max-w-[200px]">
+        <div title="Drag to move" className="flex items-center gap-1.5 font-bold text-sm text-gray-900 truncate max-w-[200px]">
           <span className="text-base">{form.icon || '📛'}</span>
           <span className="truncate">{form.name}</span>
         </div>

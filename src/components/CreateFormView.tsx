@@ -578,7 +578,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     return (
       <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa] flex flex-col h-full min-h-[440px]">
         {/* Header with back arrow */}
-        <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between pb-2 border-b border-gray-200 cursor-grab active:cursor-grabbing select-none">
+        <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} className="flex items-center justify-between pb-2 border-b border-gray-200 cursor-grab active:cursor-grabbing select-none">
           <button
             onClick={() => setStep('configure_form')}
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
@@ -586,7 +586,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="font-semibold text-sm text-gray-900">
+          <div title="Drag to move" className="font-semibold text-sm text-gray-900">
             Select a Save Location
           </div>
           <div className="w-7" />
@@ -808,7 +808,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   return (
     <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa]">
       {/* Header */}
-      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between pb-1 cursor-grab active:cursor-grabbing select-none">
+      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} className="flex items-center justify-between pb-1 cursor-grab active:cursor-grabbing select-none">
         <button
           type="button"
           onClick={onCancel}
@@ -817,13 +817,21 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         >
           <ChevronDown className="w-4 h-4" />
         </button>
-        <h1 className="font-bold text-sm text-gray-900 tracking-tight">{initialForm ? 'Edit Form' : 'Create Form'}</h1>
+        <h1 title="Drag to move" className="font-bold text-sm text-gray-900 tracking-tight">{initialForm ? 'Edit Form' : 'Create Form'}</h1>
         
         {/* Header More Menu (...) */}
-        <div className="relative">
+        <div
+          className="relative cursor-default select-auto"
+          data-no-drag
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
-            onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMoreMenuOpen((prev) => !prev);
+            }}
             title="More Form Options"
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
           >
@@ -833,10 +841,27 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           {isMoreMenuOpen && (
             <>
               <div
-                className="fixed inset-0 z-40 bg-transparent"
-                onClick={() => setIsMoreMenuOpen(false)}
+                className="fixed inset-0 z-40 bg-transparent cursor-default"
+                data-no-drag
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setIsMoreMenuOpen(false);
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setIsMoreMenuOpen(false);
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMoreMenuOpen(false);
+                }}
               />
-              <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-52 space-y-0.5 text-xs animate-fadeIn">
+              <div
+                className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-52 space-y-0.5 text-xs animate-fadeIn cursor-default select-text"
+                data-no-drag
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
                 <button
                   type="button"
                   onClick={handleDuplicateForm}

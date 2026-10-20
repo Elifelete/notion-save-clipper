@@ -7,9 +7,15 @@ let isPointerActive = false;
  * Uses delta-based screen movement for buttery-smooth 60fps dragging without freezing or jumping.
  */
 export function handleHeaderMouseDown(e: React.PointerEvent | React.MouseEvent) {
-  // If clicked inside an interactive element (button, link, input, select), do not initiate drag
   const target = e.target as HTMLElement | null;
-  if (!target || target.closest('button, input, select, textarea, a, [role="button"]')) {
+
+  // Never initiate drag if clicked on interactive controls, menus, dialogs, or elements marked with data-no-drag
+  if (
+    !target ||
+    target.closest(
+      'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"], [role="dialog"], [data-no-drag], .no-drag'
+    )
+  ) {
     return;
   }
 
