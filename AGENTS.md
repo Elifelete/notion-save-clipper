@@ -1,85 +1,86 @@
-# Notion Save — Guia para Agentes de IA (AGENTS.md)
+# Notion Save — AI Agent & Developer Guidelines (AGENTS.md)
 
-Este documento fornece orientações essenciais, convenções de código e contexto operacional para qualquer agente autônomo ou assistente de IA trabalhando no repositório **Notion Save**.
-
----
-
-## 🎯 Visão Geral do Projeto
-
-**Notion Save** é uma extensão de navegador (Chrome MV3) moderna, local-first e sem intermediários (servidores proxy), inspirada na interface e na experiência do *Save to Notion (Save.to)*.
-
-- **Stack Tecnológica**:
-  - Framework: [WXT (Next-gen Web Extension Framework)](https://wxt.dev/) com Vite
-  - UI: React 19 + TypeScript + Tailwind CSS v4 + Lucide React
-  - Parsing de Artigos: `@mozilla/readability`
-  - Armazenamento: `chrome.storage.local` (tokens, configurações e formulários) e `localStorage` (rascunhos efêmeros)
-  - Backend/API: Conexão direta com a [Notion REST API v1](https://developers.notion.com/) usando *Internal Integration Secret*
+This document provides essential instructions, architecture conventions, and operational context for autonomous AI agents and developers working on the **Notion Save** repository.
 
 ---
 
-## 📁 Estrutura de Diretórios Chave
+## 🎯 Project Overview
 
-- [`entrypoints/`](file:///C:/Users/Eli/Documents/projects/notion-save/entrypoints/):
-  - [`background.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/entrypoints/background.ts): Service worker MV3 (captura de screenshots de abas ativas e rotas de background).
-  - [`content.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/entrypoints/content.ts): Injetado nas páginas para gerenciar o overlay modal (iframe), captura visual de elementos da página e injeção de badges de redes sociais.
-  - [`popup/`](file:///C:/Users/Eli/Documents/projects/notion-save/entrypoints/popup/): Interface de usuário do popup/modal da extensão.
-- [`src/services/`](file:///C:/Users/Eli/Documents/projects/notion-save/src/services/):
-  - [`notion.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/src/services/notion.ts): Cliente direto para a Notion API (busca paginada de databases, criação de páginas com propriedades dinâmicas e blocos no canvas, anti-duplicação).
-  - [`storage.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/src/services/storage.ts): CRUD de formulários/workflows e credenciais em `chrome.storage.local`.
-  - [`extractor.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/src/services/extractor.ts): Scripts de extração de metadados da aba ativa (OpenGraph, Twitter Cards, favicons, imagens).
-  - [`reader.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/src/services/reader.ts): Conversão de artigos limpos para blocos nativos do Notion via Readability.
-  - [`socialMedia.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/src/services/socialMedia.ts): Observadores e extratores de posts para redes sociais (Twitter/X e Instagram).
-- [`src/components/`](file:///C:/Users/Eli/Documents/projects/notion-save/src/components/): Componentes React modulares (views, fields, modais de capa).
-- [`docs/`](file:///C:/Users/Eli/Documents/projects/notion-save/docs/): Documentação arquitetural aprofundada ([`docs/architecture.md`](file:///C:/Users/Eli/Documents/projects/notion-save/docs/architecture.md)).
+**Notion Save** is a modern, local-first browser extension (Chrome Manifest V3) inspired by the workflow and UI of *Save to Notion (Save.to)*. It connects directly to the official Notion API without any third-party intermediary servers.
+
+- **Technology Stack**:
+  - **Framework**: [WXT (Next-gen Web Extension Framework)](https://wxt.dev/) with Vite
+  - **UI**: React 19, TypeScript, Tailwind CSS v4, Lucide React
+  - **Article Parsing**: `@mozilla/readability`
+  - **Storage**: `chrome.storage.local` (persisted tokens, workflows, database caches) and `localStorage` (ephemeral draft recovery)
+  - **API**: Direct REST calls to [Notion API v1](https://developers.notion.com/) using the user's *Internal Integration Secret*
 
 ---
 
-## ⚙️ Comandos de Desenvolvimento e Validação
+## 📁 Key Directory Structure
 
-Sempre valide suas alterações executando os scripts oficiais via `pnpm`:
+All paths below are relative to the repository root:
+
+- [`entrypoints/`](entrypoints/):
+  - [`background.ts`](entrypoints/background.ts): MV3 Background service worker (privileged operations such as capturing tab screenshots).
+  - [`content.ts`](entrypoints/content.ts): Injected into web pages to manage the popup overlay modal iframe, interactive element picker, and social media badge injection.
+  - [`popup/`](entrypoints/popup/): Extension popup UI (React application rendered in browser toolbar or page overlay).
+- [`src/services/`](src/services/):
+  - [`notion.ts`](src/services/notion.ts): Direct Notion REST API client (paginated database search, page creation with blocks and properties, anti-duplication, tag creation).
+  - [`storage.ts`](src/services/storage.ts): CRUD operations for workflows and credentials via `chrome.storage.local`.
+  - [`extractor.ts`](src/services/extractor.ts): Webpage metadata extraction (OpenGraph, Twitter Cards, favicons, DOM images).
+  - [`reader.ts`](src/services/reader.ts): Readability-based article cleaner and HTML-to-Notion block converter.
+  - [`socialMedia.ts`](src/services/socialMedia.ts): Continuous badge injection and robust post data extraction for Twitter/X and Instagram (feeds and dialogs).
+- [`src/components/`](src/components/): Modular UI views (`SavePageView`, `SelectFormView`, `CreateFormView`, `SettingsView`, `CoverImagePicker`, `PropertyField`).
+- [`docs/`](docs/): Deep architectural documentation ([`docs/architecture.md`](docs/architecture.md)).
+
+---
+
+## ⚙️ Development, Validation, and Build Commands
+
+Always validate modifications using the official repository scripts via `pnpm`:
 
 ```bash
-# Verificação estrita de tipagem TypeScript (sem emitir arquivos)
+# Strict TypeScript type check (no file emission)
 pnpm compile
 
-# Build de produção do WXT para Chrome MV3
+# Production build for Chrome MV3
 pnpm build
 
-# Empacotamento completo em arquivo .zip para distribuição (.output/*.zip)
+# Full distribution packaging to .zip (.output/*.zip)
 pnpm zip
 ```
 
 > [!IMPORTANT]
-> Nunca considere uma tarefa concluída sem antes executar `pnpm compile` com sucesso (código de saída 0).
+> Never complete a task without ensuring `pnpm compile` exits with status code 0.
 
 ---
 
-## 🔒 Regras e Cuidados Críticos
+## 🔒 Critical Rules & Constraints
 
-### 1. Limites Estritos da Notion API
-- **Limite de 2.000 caracteres por `rich_text`**: O Notion rejeita com erro `400 Bad Request` qualquer objeto de texto cujo conteúdo ultrapasse 2.000 caracteres. Sempre fatie textos longos (ex: chunks de 1.800 a 1.900 caracteres) ao criar blocos `quote`, `paragraph` ou propriedades de texto.
-- **Imagens temporárias de CDN**: Imagens de CDN do Instagram, Threads ou Twitter expiram em poucas horas ou bloqueiam hotlinking. Sempre prefira blocos `embed` com a URL canônica do post no canvas do Notion, permitindo visualização rica e interativa sem dependência de URLs temporárias.
-- **Propriedades da Database vs. Canvas**:
-  - Propriedades de tabela são ideais para filtros e organização (Title, URL, Data, Tags).
-  - Conteúdo extenso, legendas de posts e transcrições devem sempre ir para o **Canvas** (`contentBlocks`) como blocos nativos.
+### 1. Strict Notion API Limits
+- **2,000 character limit per `rich_text` object**: Notion returns `400 Bad Request` if a single text chunk exceeds 2,000 characters. Always split long strings into chunks of 1,800–1,900 characters when constructing `quote`, `paragraph`, or property blocks.
+- **Expiring CDN URLs**: Direct media URLs from platforms like Instagram or Twitter expire within hours or block hotlinking. Use native Notion `embed` blocks with canonical post URLs on the page canvas instead of storing expiring CDN links.
+- **Canvas vs. Database Properties**:
+  - Database properties are best suited for structured metadata (Title, Canonical URL, Date, Select tags).
+  - Unbounded text, post captions, and article content must always be placed on the **Canvas** (`contentBlocks`) as native blocks.
 
-### 2. Comunicação entre Content Script e Popup (Iframe / Overlay)
-- O popup pode ser aberto tanto como janela pop-up tradicional do navegador quanto como um iframe overlay injetado na página pelo `content.ts`.
-- Toda comunicação bidirecional ocorre por meio de `window.postMessage`:
-  - `NOTION_SAVE_START_ELEMENT_PICKER`: Solicita ao content script ativar o apontador visual de áreas da página.
-  - `NOTION_SAVE_STOP_ELEMENT_PICKER`: Cancela a seleção visual (ex: ao pressionar `ESC`).
-  - `NOTION_SAVE_SET_CUSTOM_AREA` / `NOTION_SAVE_SET_SELECTION`: Envia o texto capturado para preenchimento no formulário.
-  - `NOTION_SAVE_SET_SOCIAL_POST`: Transmite dados do post social clicado no feed/modal para o popup.
-  - `NOTION_SAVE_CLOSE`: Fecha o overlay na página hospedeira.
+### 2. Communication Between Content Script and Popup Overlay
+- The popup can open as a standard browser action popup or as an injected modal overlay iframe on the page.
+- Bidirectional messaging between the content script and iframe uses `window.postMessage`:
+  - `NOTION_SAVE_START_ELEMENT_PICKER`: Activates visual area picker on the target page.
+  - `NOTION_SAVE_STOP_ELEMENT_PICKER`: Cancels selection (e.g., user presses `ESC`).
+  - `NOTION_SAVE_SET_CUSTOM_AREA` / `NOTION_SAVE_SET_SELECTION`: Transmits highlighted or picked text back into the form.
+  - `NOTION_SAVE_SET_SOCIAL_POST`: Sends scraped post data (author, ID, caption, URL) into the popup form.
+  - `NOTION_SAVE_CLOSE`: Closes the overlay iframe on the host page.
 
-### 3. Preservação de Rascunhos (Auto-save)
-- Para evitar que o usuário perca o que digitou ao clicar fora do popup ou ao navegar, o componente [`SavePageView`](file:///C:/Users/Eli/Documents/projects/notion-save/src/components/SavePageView.tsx) sincroniza o estado corrente com `localStorage` sob uma chave indexada por formulário e URL (`notion_save_draft_${formId}_${url}`). O rascunho é limpo automaticamente após um salvamento bem-sucedido.
+### 3. Draft Auto-save Persistence
+- To prevent data loss when clicking outside the popup, [`SavePageView`](src/components/SavePageView.tsx) syncs changes to `localStorage` under keys scoped by form ID and URL (`notion_save_draft_${formId}_${url}`). Rascunhos/drafts are automatically cleared upon a successful save.
 
 ---
 
-## 📝 Convenções de Código
+## 📝 Code Conventions
 
-1. **Tipagem Forte**: Sempre defina e exporte interfaces no [`src/types/index.ts`](file:///C:/Users/Eli/Documents/projects/notion-save/src/types/index.ts). Evite `any` arbitrário a menos que esteja lidando com payloads polimórficos da Notion API.
-2. **Estilização**: Use classes utilitárias do Tailwind CSS. Mantenha os seletores de UI compactos e alinhados com a identidade visual sóbria estilo *Save.to*.
-3. **Links em Markdown**: Sempre forneça links absolutos com protocolo `file:///` para facilitar a navegação nos arquivos do projeto.
-4. **Isolamento de Erros**: Chamadas de rede da Notion API devem fornecer mensagens de erro legíveis e orientadas à ação para o usuário (ex: token inválido, permissão ausente na database).
+1. **Strict Typing**: All data structures must be defined in [`src/types/index.ts`](src/types/index.ts). Avoid loose `any` typing outside Notion API polymorphic responses.
+2. **Relative Paths**: Documentation, imports, and cross-references must always use relative repository paths, never local machine absolute paths.
+3. **Clean Error Handling**: Present actionable, friendly error messages to the user for common issues (expired Notion tokens, unauthorized databases, rate limits).
