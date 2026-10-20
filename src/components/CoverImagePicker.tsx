@@ -57,13 +57,13 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
 
   return (
     <div>
-      {/* Visualização da Capa Atual (se não estiver controlado externamente) */}
+      {/* Current Cover Preview (when not controlled externally) */}
       {externalIsOpen === undefined && (
         effectiveCover ? (
           <div className="relative group rounded-lg overflow-hidden h-28 border border-gray-200 bg-gray-100 shadow-xs">
             <img
               src={effectiveCover}
-              alt="Capa"
+              alt="Cover"
               className="w-full h-full object-cover"
               onError={() => onSelectCover(undefined)}
             />
@@ -73,14 +73,14 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
                 onClick={() => setIsOpen(true)}
                 className="py-1 px-2 bg-white/90 hover:bg-white text-gray-800 rounded text-[11px] font-medium shadow-xs cursor-pointer"
               >
-                Trocar Capa
+                Change Cover
               </button>
               <button
                 type="button"
                 onClick={() => onSelectCover(undefined)}
                 className="py-1 px-2 bg-red-600/90 hover:bg-red-600 text-white rounded text-[11px] font-medium shadow-xs cursor-pointer"
               >
-                Remover
+                Remove
               </button>
             </div>
           </div>
@@ -91,12 +91,12 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
             className="w-full h-20 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-blue-600 transition-colors bg-white/50 cursor-pointer"
           >
             <ImageIcon className="w-5 h-5 text-gray-400" />
-            <span className="text-xs font-medium">Adicionar Imagem de Capa</span>
+            <span className="text-xs font-medium">Add Cover Image</span>
           </button>
         )
       )}
 
-      {/* Modal / Dialog de Seleção de Capa */}
+      {/* Cover Selection Dialog */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fadeIn">
           <div className="w-full max-w-sm bg-white rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -104,7 +104,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
               <div className="flex items-center gap-1.5 font-semibold text-gray-900 text-xs">
                 <Sparkles className="w-4 h-4 text-blue-600" />
-                <span>Escolher Imagem de Capa</span>
+                <span>Choose Cover Image</span>
               </div>
               <button
                 type="button"
@@ -115,7 +115,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
               </button>
             </div>
 
-            {/* Abas: Da Página vs Inserir Link */}
+            {/* Tabs: Page Images vs Direct URL */}
             <div className="flex border-b border-gray-100 bg-gray-50 text-[11px]">
               <button
                 type="button"
@@ -126,7 +126,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
                     : 'border-transparent text-gray-500 hover:text-gray-800'
                 }`}
               >
-                Imagens da Página ({pageImages.length})
+                Page Images ({pageImages.length})
               </button>
               <button
                 type="button"
@@ -137,27 +137,27 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
                     : 'border-transparent text-gray-500 hover:text-gray-800'
                 }`}
               >
-                Inserir Link URL
+                Direct Image URL
               </button>
             </div>
 
-            {/* Conteúdo */}
+            {/* Content */}
             <div className="p-3 overflow-y-auto max-h-[300px] flex-1">
               {activeTab === 'page' ? (
                 loadingImages ? (
                   <div className="flex flex-col items-center justify-center py-10 text-gray-400 space-y-2">
                     <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                    <span>Carregando imagens da página...</span>
+                    <span>Loading page images...</span>
                   </div>
                 ) : pageImages.length === 0 ? (
                   <div className="text-center py-8 text-gray-400 space-y-2">
-                    <p>Nenhuma imagem relevante encontrada no site ativo.</p>
+                    <p>No relevant images found on active page.</p>
                     <button
                       type="button"
                       onClick={() => setActiveTab('url')}
                       className="text-blue-600 hover:underline font-medium"
                     >
-                      Inserir link personalizado
+                      Enter direct image URL
                     </button>
                   </div>
                 ) : (
@@ -188,7 +188,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
               ) : (
                 <form onSubmit={handleApplyCustomUrl} className="space-y-3 py-2">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-gray-700">Link direto da imagem (URL):</label>
+                    <label className="text-[11px] font-medium text-gray-700">Direct image URL:</label>
                     <div className="relative">
                       <Link className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
                       <input
@@ -205,7 +205,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
                     type="submit"
                     className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                   >
-                    Usar Imagem
+                    Use Image
                   </button>
                 </form>
               )}
@@ -222,7 +222,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
                   }}
                   className="text-red-500 hover:underline font-medium"
                 >
-                  Remover Capa
+                  Remove Cover
                 </button>
               ) : (
                 <div />
@@ -232,7 +232,7 @@ export const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
                 onClick={() => setIsOpen(false)}
                 className="py-1 px-3 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium cursor-pointer"
               >
-                Fechar
+                Close
               </button>
             </div>
           </div>

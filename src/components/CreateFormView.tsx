@@ -71,10 +71,9 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   onCancel,
   onDeleteForm,
 }) => {
-  // Passos: 'configure_form' (tela principal idêntica ao Save.to) ou 'select_location' (modal de escolher database/página)
   const [step, setStep] = useState<'configure_form' | 'select_location'>('configure_form');
 
-  // Destinos Notion
+  // Notion Destinations
   const [destinations, setDestinations] = useState<NotionDestination[]>([]);
   const [selectedDestination, setSelectedDestination] = useState<NotionDestination | null>(null);
   const [databaseProperties, setDatabaseProperties] = useState<Record<string, any>>({});
@@ -97,7 +96,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     initialForm?.pageSaveMode || 'subpage'
   );
 
-  // Fields (mapeamentos)
+  // Field mappings
   const [mappings, setMappings] = useState<PropertyFieldMapping[]>(
     initialForm?.mappings || []
   );
@@ -107,10 +106,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [isAddFieldOpen, setIsAddFieldOpen] = useState(false);
   const [propertySearchQuery, setPropertySearchQuery] = useState('');
 
-  // Dropdown de escolha de Source de uma propriedade
+  // Dropdown for selecting source
   const [activeSourceMenuId, setActiveSourceMenuId] = useState<string | null>(null);
 
-  // Busca e Filtro de Destinos
+  // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [submitting, setSubmitting] = useState(false);
@@ -121,7 +120,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const [isDatabasesCollapsed, setIsDatabasesCollapsed] = useState(false);
   const [isPagesCollapsed, setIsPagesCollapsed] = useState(false);
 
-  // Busca debounced ao vivo no Notion caso o usuário digite na barra de busca
+  // Debounced live search
   useEffect(() => {
     if (step !== 'select_location') return;
     const query = searchQuery.trim();
@@ -139,7 +138,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           });
         }
       } catch (err) {
-        console.warn('Erro na busca ao vivo do Notion:', err);
+        console.warn('Error during live Notion search:', err);
       } finally {
         setSearchingServer(false);
       }
@@ -148,7 +147,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     return () => clearTimeout(timer);
   }, [searchQuery, step, apiKey]);
 
-  // 1. Carrega todas as databases e páginas compartilhadas com a integração
+  // Load destinations
   useEffect(() => {
     async function loadDestinations() {
       try {
@@ -177,12 +176,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
         } else if (data.length > 0 && data[0]) {
           const first = data[0];
           setSelectedDestination(first);
-          setFormName(`Salvar em ${first.title}`);
+          setFormName(`Save to ${first.title}`);
         } else {
           setStep('select_location');
         }
       } catch (err: any) {
-        setError(err.message || 'Erro ao carregar locais do Notion.');
+        setError(err.message || 'Error loading Notion destinations.');
       } finally {
         setLoading(false);
       }
@@ -190,7 +189,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     loadDestinations();
   }, [apiKey]);
 
-  // 2. Quando seleciona um destino, carrega seu schema se for database
+  // Load schema on selected destination
   useEffect(() => {
     async function loadSchema() {
       if (!selectedDestination) return;
@@ -201,12 +200,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           const properties = destSchema.properties || selectedDestination.properties || {};
           setDatabaseProperties(properties);
 
-          // Se estivermos editando e for a mesma database, mantém os mapeamentos existentes
           if (initialForm && initialForm.databaseId === selectedDestination.id && mappings.length > 0) {
             return;
           }
 
-          // Inicializa mapeamentos inteligentes
           const initialMappings: PropertyFieldMapping[] = [];
 
           for (const [propName, prop] of Object.entries(properties) as [string, any][]) {
@@ -235,7 +232,9 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               lowerName === 'description' ||
               lowerName === 'descrição' ||
               lowerName === 'descricao' ||
-              lowerName === 'resumo'
+              lowerName === 'resumo' ||
+              lowerName === 'caption' ||
+              lowerName === 'legenda'
             ) {
               initialMappings.push({
                 notionPropertyId: pId,
@@ -258,10 +257,9 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
 
           setMappings(initialMappings);
         } catch (err) {
-          console.error('Erro ao ler propriedades da database:', err);
+          console.error('Error reading database properties:', err);
         }
       } else {
-        // Para páginas simples
         setDatabaseProperties({});
         if (initialForm && initialForm.databaseId === selectedDestination.id && mappings.length > 0) {
           return;
@@ -289,7 +287,6 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     loadSchema();
   }, [apiKey, selectedDestination]);
 
-  // Reordena campos
   const moveField = (fromIndex: number, toIndex: number) => {
     if (toIndex < 0 || toIndex >= mappings.length || fromIndex === toIndex) return;
     setMappings((prev) => {
@@ -300,14 +297,13 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     });
   };
 
-  // Ações do Menu "..." (Mais opções)
   const handleDuplicateForm = async () => {
     setIsMoreMenuOpen(false);
     if (!selectedDestination) return;
     try {
       const duplicated: FormConfig = {
         id: crypto.randomUUID(),
-        name: `${formName} (Cópia)`,
+        name: `${formName} (Copy)`,
         icon: formIcon,
         destinationType: selectedDestination.type,
         databaseId: selectedDestination.id,
@@ -324,7 +320,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
       await saveForm(duplicated);
       onFormCreated(duplicated);
     } catch (err: any) {
-      alert(`Erro ao duplicar: ${err.message}`);
+      alert(`Error duplicating: ${err.message}`);
     }
   };
 
@@ -392,7 +388,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   const handleDeleteFormAction = async () => {
     setIsMoreMenuOpen(false);
     if (!initialForm) return;
-    if (window.confirm(`Deseja realmente excluir o formulário "${formName}"?`)) {
+    if (window.confirm(`Are you sure you want to delete form "${formName}"?`)) {
       if (onDeleteForm) {
         onDeleteForm(initialForm.id);
       } else {
@@ -402,19 +398,16 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     }
   };
 
-  // Escolhe um novo local
   const handleSelectLocation = (dest: NotionDestination) => {
     setSelectedDestination(dest);
-    setFormName(`Salvar em ${dest.title}`);
+    setFormName(`Save to ${dest.title}`);
     setStep('configure_form');
   };
 
-  // Remove um campo
   const handleRemoveField = (propId: string) => {
     setMappings((prev) => prev.filter((m) => m.notionPropertyId !== propId));
   };
 
-  // Adiciona um campo vindo do schema da Database
   const handleAddFieldFromDatabase = (propName: string, prop: any) => {
     const propId = prop?.id || propName;
     if (mappings.some((m) => m.notionPropertyId === propId)) return;
@@ -425,8 +418,8 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
 
     if (pType === 'title') defaultSource = 'page_title';
     else if (pType === 'url' || lowerName.includes('url') || lowerName.includes('link')) defaultSource = 'page_url';
-    else if (lowerName.includes('desc') || lowerName.includes('resumo')) defaultSource = 'page_description';
-    else if (pType === 'date' || lowerName.includes('data')) defaultSource = 'page_date';
+    else if (lowerName.includes('desc') || lowerName.includes('resumo') || lowerName.includes('caption') || lowerName.includes('legenda')) defaultSource = 'page_description';
+    else if (pType === 'date' || lowerName.includes('data') || lowerName.includes('date')) defaultSource = 'page_date';
     else if (lowerName.includes('author') || lowerName.includes('autor')) defaultSource = 'page_author';
 
     const opts = prop?.options || prop?.multi_select?.options || prop?.select?.options || [];
@@ -445,7 +438,6 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     setPropertySearchQuery('');
   };
 
-  // Altera a fonte de dados (Source) de um campo
   const handleSelectSource = (propId: string, source: PropertyDataSource) => {
     setMappings((prev) =>
       prev.map((m) => (m.notionPropertyId === propId ? { ...m, source } : m))
@@ -479,13 +471,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
       await saveForm(newForm);
       onFormCreated(newForm);
     } catch (err: any) {
-      alert(`Erro ao salvar formulário: ${err.message}`);
+      alert(`Error saving form: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Ícone por tipo de propriedade Notion
   const renderPropertyIcon = (propType: string) => {
     switch (propType) {
       case 'title':
@@ -508,7 +499,6 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     }
   };
 
-  // Ícone por tipo de Source
   const renderSourceIcon = (source: PropertyDataSource) => {
     const opt = SOURCE_OPTIONS.find((s) => s.source === source);
     if (!opt) return <FileText className="w-3 h-3 text-gray-400" />;
@@ -516,7 +506,6 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     return <IconComponent className="w-3 h-3 text-gray-500" />;
   };
 
-  // Label amigável do Source
   const getSourceLabel = (source: PropertyDataSource) => {
     const opt = SOURCE_OPTIONS.find((s) => s.source === source);
     return opt?.label || 'Manual';
@@ -526,7 +515,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     return (
       <div className="flex flex-col items-center justify-center p-12 space-y-2 text-gray-500">
         <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-        <p className="text-xs">Carregando dados do seu Notion...</p>
+        <p className="text-xs">Loading Notion data...</p>
       </div>
     );
   }
@@ -535,24 +524,24 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     return (
       <div className="p-4 space-y-3 text-xs">
         <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-md">
-          <p className="font-semibold mb-1">Nenhum local encontrado no Notion!</p>
+          <p className="font-semibold mb-1">No locations found in Notion!</p>
           <p className="text-[11px] leading-relaxed">
-            Certifique-se de ter compartilhado pelo menos uma Página ou Database com a sua integração no Notion.
+            Make sure you have shared at least one Database or Page with your Notion integration.
             <br />
-            No Notion, abra sua Página ou Database &gt; clique em <b>(...)</b> &gt; <b>Conexões</b> &gt; adicione a sua integração.
+            In Notion, open your Page or Database &gt; click <b>(...)</b> &gt; <b>Connections</b> &gt; add your integration.
           </p>
         </div>
         <button
           onClick={onCancel}
           className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-md font-medium text-xs cursor-pointer"
         >
-          Voltar
+          Back
         </button>
       </div>
     );
   }
 
-  // TELA SECUNDÁRIA: Select a Save Location
+  // SECONDARY STEP: Select a Save Location
   if (step === 'select_location') {
     const filteredDestinations = destinations.filter((item) => {
       const matchesSearch =
@@ -587,12 +576,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
 
     return (
       <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa] flex flex-col h-full min-h-[440px]">
-        {/* Header com navegação e seta de voltar */}
+        {/* Header with back arrow */}
         <div className="flex items-center justify-between pb-2 border-b border-gray-200">
           <button
             onClick={() => setStep('configure_form')}
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
-            title="Voltar"
+            title="Back"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -602,7 +591,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           <div className="w-7" />
         </div>
 
-        {/* Barra de Busca */}
+        {/* Search Bar */}
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
           <input
@@ -618,7 +607,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           )}
         </div>
 
-        {/* Filtro: Viewing */}
+        {/* Filter: Viewing */}
         <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
           <span>Viewing</span>
           <div className="relative">
@@ -635,10 +624,11 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           </div>
         </div>
 
-        {/* Lista de Resultados */}
+        {/* Results List */}
         <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-          {filteredDestinations.length === 0 ? (            <div className="text-center py-8 text-gray-400 text-xs">
-              Nenhuma base ou página encontrada para "{searchQuery}".
+          {filteredDestinations.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-xs">
+              No databases or pages found for "{searchQuery}".
             </div>
           ) : (
             <>
@@ -661,7 +651,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                         onClick={() => setExpandAllDatabases((prev) => !prev)}
                         className="text-[10px] font-medium text-blue-600 hover:underline cursor-pointer"
                       >
-                        {expandAllDatabases ? "Recolher" : `Ver todas (${databaseItems.length})`}
+                        {expandAllDatabases ? 'Collapse' : `View all (${databaseItems.length})`}
                       </button>
                     )}
                   </div>
@@ -700,7 +690,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            title="Abrir no Notion em nova aba"
+                            title="Open in Notion in new tab"
                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -714,7 +704,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                           onClick={() => setExpandAllDatabases(true)}
                           className="w-full py-1.5 text-center text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1 border border-dashed border-blue-200 mt-1"
                         >
-                          <span>Mostrar mais ({databaseItems.length - 6} restantes)</span>
+                          <span>Show more ({databaseItems.length - 6} remaining)</span>
                           <ChevronDown className="w-3 h-3" />
                         </button>
                       )}
@@ -742,7 +732,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                         onClick={() => setExpandAllPages((prev) => !prev)}
                         className="text-[10px] font-medium text-blue-600 hover:underline cursor-pointer"
                       >
-                        {expandAllPages ? "Recolher" : `Ver todas (${pageItems.length})`}
+                        {expandAllPages ? 'Collapse' : `View all (${pageItems.length})`}
                       </button>
                     )}
                   </div>
@@ -781,7 +771,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            title="Abrir no Notion em nova aba"
+                            title="Open in Notion in new tab"
                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer shrink-0"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -795,7 +785,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                           onClick={() => setExpandAllPages(true)}
                           className="w-full py-1.5 text-center text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1 border border-dashed border-blue-200 mt-1"
                         >
-                          <span>Mostrar mais ({pageItems.length - 6} restantes)</span>
+                          <span>Show more ({pageItems.length - 6} remaining)</span>
                           <ChevronDown className="w-3 h-3" />
                         </button>
                       )}
@@ -810,30 +800,30 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     );
   }
 
-  // TELA PRINCIPAL: Create Form (Design Idêntico ao Save.to)
+  // MAIN VIEW: Create / Edit Form
   const visibleFields = showAllFields ? mappings : mappings.slice(0, 2);
   const hiddenFieldsCount = Math.max(0, mappings.length - 2);
 
   return (
     <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa]">
-      {/* Header Estilo Save.to */}
+      {/* Header */}
       <div className="flex items-center justify-between pb-1">
         <button
           type="button"
           onClick={onCancel}
           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
-          title="Voltar"
+          title="Back"
         >
           <ChevronDown className="w-4 h-4" />
         </button>
         <h1 className="font-bold text-sm text-gray-900 tracking-tight">{initialForm ? 'Edit Form' : 'Create Form'}</h1>
         
-        {/* Menu de Opções do Header (...) */}
+        {/* Header More Menu (...) */}
         <div className="relative">
           <button
             type="button"
             onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-            title="Mais Opções do Formulário"
+            title="More Form Options"
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
           >
             <MoreHorizontal className="w-4 h-4" />
@@ -852,7 +842,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-blue-600 cursor-pointer transition-colors"
                 >
                   <Copy className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Duplicar Formulário</span>
+                  <span>Duplicate Form</span>
                 </button>
                 <button
                   type="button"
@@ -860,7 +850,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-blue-600 cursor-pointer transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Redefinir Campos Padrões</span>
+                  <span>Reset Default Fields</span>
                 </button>
                 {initialForm && (
                   <>
@@ -871,7 +861,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50 cursor-pointer transition-colors font-medium"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                      <span>Excluir Formulário</span>
+                      <span>Delete Form</span>
                     </button>
                   </>
                 )}
@@ -882,14 +872,14 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
       </div>
 
       <form onSubmit={handleSaveForm} className="space-y-3">
-        {/* SEÇÃO 1: Form Config */}
+        {/* SECTION 1: Form Config */}
         <div className="space-y-1.5">
           <div className="text-[11px] font-bold text-gray-500 tracking-wide uppercase px-0.5">
             Form Config
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200/90 shadow-2xs p-3 space-y-3">
-            {/* Linha 1: Ícone + Título do Form */}
+            {/* Row 1: Icon + Form Title */}
             <div className="flex items-center gap-2">
               <div className="relative">
                 <button
@@ -927,7 +917,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               />
             </div>
 
-            {/* Linha 2: Save Location */}
+            {/* Row 2: Save Location */}
             <div className="flex items-center justify-between pt-1">
               <span className="font-semibold text-gray-700 text-xs">Save Location</span>
               <div className="flex items-center gap-1">
@@ -937,7 +927,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-medium text-[11px] transition-colors cursor-pointer max-w-[190px]"
                 >
                   <span className="text-xs">{selectedDestination?.icon || '📁'}</span>
-                  <span className="truncate">{selectedDestination?.title || 'Selecionar local'}</span>
+                  <span className="truncate">{selectedDestination?.title || 'Select location'}</span>
                   <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                 </button>
                 {selectedDestination && (
@@ -945,7 +935,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                     href={selectedDestination.url || `https://www.notion.so/${selectedDestination.id.replace(/-/g, '')}`}
                     target="_blank"
                     rel="noreferrer"
-                    title="Abrir este local no Notion"
+                    title="Open this location in Notion"
                     className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors cursor-pointer shrink-0"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -954,10 +944,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               </div>
             </div>
 
-            {/* Se o local for uma página comum: Escolha Sub-página vs Append */}
+            {/* Subpage vs Append Mode for regular pages */}
             {selectedDestination?.type === 'page' && (
               <div className="p-2 bg-blue-50/50 border border-blue-100 rounded-lg flex items-center justify-between text-[11px]">
-                <span className="font-medium text-blue-900">Salvar como:</span>
+                <span className="font-medium text-blue-900">Save as:</span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -966,7 +956,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                       pageSaveMode === 'subpage' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
                     }`}
                   >
-                    Sub-página
+                    Sub-page
                   </button>
                   <button
                     type="button"
@@ -975,13 +965,13 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                       pageSaveMode === 'append_block' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
                     }`}
                   >
-                    No final
+                    Append block
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Linha 3: Detect existing pages */}
+            {/* Row 3: Detect existing pages */}
             <div className="flex items-center justify-between pt-1">
               <span className="font-semibold text-gray-700 text-xs">Detect existing pages</span>
               <button
@@ -999,12 +989,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               </button>
             </div>
 
-            {/* Linha 3b: Exibir caminho da pasta/database na lista inicial */}
+            {/* Row 3b: Show folder path */}
             <div className="flex items-center justify-between pt-1">
               <div className="pr-2">
-                <span className="font-semibold text-gray-700 text-xs">Exibir caminho da pasta</span>
+                <span className="font-semibold text-gray-700 text-xs">Show folder path</span>
                 <div className="text-[10px] text-gray-400 truncate max-w-[210px]">
-                  {selectedDestination?.path ? selectedDestination.path : 'Exibe a rota da pasta/database na lista inicial'}
+                  {selectedDestination?.path ? selectedDestination.path : 'Shows the folder/database path in the form list'}
                 </div>
               </div>
               <button
@@ -1013,7 +1003,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer shrink-0 ${
                   showFullPath ? 'bg-blue-600' : 'bg-gray-300'
                 }`}
-                title={showFullPath ? 'Caminho completo ativado' : 'Caminho completo desativado'}
+                title={showFullPath ? 'Full path enabled' : 'Full path disabled'}
               >
                 <div
                   className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${
@@ -1023,7 +1013,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               </button>
             </div>
 
-            {/* Linha 4: Clip Action */}
+            {/* Row 4: Clip Action */}
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-1 font-semibold text-gray-700 text-xs">
                 <span>Clip Action</span>
@@ -1059,18 +1049,18 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           </div>
         </div>
 
-        {/* SEÇÃO 2: Fields */}
+        {/* SECTION 2: Fields */}
         <div className="space-y-1.5">
           <div className="text-[11px] font-bold text-gray-500 tracking-wide uppercase px-0.5">
             Fields
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200/90 shadow-2xs overflow-visible">
-            {/* Lista de Campos Mapeados */}
+            {/* List of Mapped Fields */}
             <div className="divide-y divide-gray-100">
               {visibleFields.length === 0 ? (
                 <div className="p-3 text-center text-gray-400 text-xs">
-                  Nenhum campo adicionado. Clique abaixo para adicionar propriedades.
+                  No fields added. Click below to add properties.
                 </div>
               ) : (
                 visibleFields.map((mapping) => {
@@ -1111,12 +1101,12 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                         isDragging ? 'opacity-35 bg-blue-50/60' : 'hover:bg-gray-50/70'
                       } ${isDragOver ? 'border-t-2 border-blue-500 bg-blue-50/30' : ''}`}
                     >
-                      {/* Lado Esquerdo: Grip com Setas Rápidas + Tipo + Nome da Propriedade */}
+                      {/* Left: Grip with quick arrows + Type + Property Name */}
                       <div className="flex items-center gap-2 truncate">
                         <div className="flex items-center gap-0.5 group/grip shrink-0">
                           <div
                             className="p-1 -ml-1 text-gray-400 hover:text-blue-600 rounded cursor-grab active:cursor-grabbing transition-colors"
-                            title="Arraste para reordenar a ordem dos campos ou use as setas"
+                            title="Drag to reorder fields or use arrows"
                           >
                             <GripVertical className="w-3.5 h-3.5 shrink-0" />
                           </div>
@@ -1129,7 +1119,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                                 moveField(fullIndex, fullIndex - 1);
                               }}
                               className="text-gray-400 hover:text-blue-600 disabled:opacity-0 p-0.5 rounded cursor-pointer"
-                              title="Subir posição"
+                              title="Move up"
                             >
                               <ChevronUp className="w-2.5 h-2.5" />
                             </button>
@@ -1141,7 +1131,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                                 moveField(fullIndex, fullIndex + 1);
                               }}
                               className="text-gray-400 hover:text-blue-600 disabled:opacity-0 p-0.5 rounded cursor-pointer"
-                              title="Descer posição"
+                              title="Move down"
                             >
                               <ChevronDown className="w-2.5 h-2.5" />
                             </button>
@@ -1155,7 +1145,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                         </span>
                       </div>
 
-                    {/* Lado Direito: Seta + Source Pill */}
+                    {/* Right: Arrow + Source Pill */}
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-gray-300 text-xs">→</span>
 
@@ -1184,11 +1174,11 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                           )}
                         </button>
 
-                        {/* Menu de Seleção de Fonte */}
+                        {/* Source Selection Menu */}
                         {activeSourceMenuId === mapping.notionPropertyId && (
                           <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 w-48 space-y-0.5 text-xs">
                             <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                              Escolher Fonte
+                              Choose Source
                             </div>
                             {SOURCE_OPTIONS.map((opt) => {
                               const isSelected = mapping.source === opt.source;
@@ -1218,7 +1208,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
               )}
             </div>
 
-            {/* Botão + Add New Field */}
+            {/* Button + Add New Field */}
             <div className="border-t border-gray-100 p-2 relative">
               <button
                 type="button"
@@ -1229,24 +1219,22 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 <span>Add New Field</span>
               </button>
 
-              {/* Dropdown Menu "+ Add New Field" com Backdrop e Botão Fechar */}
+              {/* Dropdown Menu "+ Add New Field" */}
               {isAddFieldOpen && (
                 <>
-                  {/* Backdrop para fechar ao clicar em qualquer lugar fora */}
                   <div
                     className="fixed inset-0 z-40 bg-black/15 transition-opacity"
                     onClick={() => setIsAddFieldOpen(false)}
                   />
 
-                  {/* Popover posicionado acima do botão com cabeçalho e botão de fechar */}
                   <div className="absolute left-2 right-2 bottom-full mb-1.5 z-50 bg-white border border-gray-200 rounded-xl shadow-2xl p-2.5 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
                     <div className="flex items-center justify-between pb-1 border-b border-gray-100">
-                      <span className="font-bold text-xs text-gray-800">Adicionar Propriedade</span>
+                      <span className="font-bold text-xs text-gray-800">Add Property</span>
                       <button
                         type="button"
                         onClick={() => setIsAddFieldOpen(false)}
                         className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-                        title="Fechar"
+                        title="Close"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1264,7 +1252,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                       />
                     </div>
 
-                    {/* Propriedades da Database */}
+                    {/* Database Properties */}
                     <div className="space-y-1">
                       <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1">
                         Database Properties
@@ -1274,8 +1262,8 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                         {Object.entries(databaseProperties).length === 0 ? (
                           <div className="py-2.5 text-center text-gray-400 text-xs">
                             {selectedDestination?.type === 'page'
-                              ? 'Páginas comuns não possuem propriedades adicionais.'
-                              : 'Nenhuma propriedade adicional encontrada nesta base.'}
+                              ? 'Regular pages do not have custom properties.'
+                              : 'No additional properties found in this database.'}
                           </div>
                         ) : (
                           Object.entries(databaseProperties)
@@ -1305,7 +1293,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                                     <span className="font-medium truncate">{propName}</span>
                                   </div>
                                   <span className="text-[10px] text-gray-400">
-                                    {isAlreadyAdded ? 'Already Added' : `+ Adicionar`}
+                                    {isAlreadyAdded ? 'Already Added' : `+ Add`}
                                   </span>
                                 </button>
                               );
@@ -1317,7 +1305,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
                 </>
               )}
 
-              {/* Botão de Expandir / Recolher Campos Extras */}
+              {/* Expand / Collapse Extra Fields */}
               {hiddenFieldsCount > 0 && (
                 <button
                   type="button"
@@ -1341,7 +1329,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
           </div>
         </div>
 
-        {/* Botão Principal: Save Form */}
+        {/* Submit Button */}
         <div className="pt-2">
           <button
             type="submit"
@@ -1351,10 +1339,10 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
             {submitting ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>{initialForm ? 'Salvando Alterações...' : 'Saving Form...'}</span>
+                <span>{initialForm ? 'Saving Changes...' : 'Saving Form...'}</span>
               </>
             ) : (
-              <span>{initialForm ? 'Salvar Alterações' : 'Save Form'}</span>
+              <span>{initialForm ? 'Save Changes' : 'Save Form'}</span>
             )}
           </button>
         </div>

@@ -5,12 +5,12 @@ export interface NotionDestination {
   title: string;
   icon?: string;
   type: NotionDestinationType;
-  path?: string; // Ex: "My Life / ... / Projects" ou "Workspace"
-  url?: string;  // URL direta da página ou database no Notion
+  path?: string; // e.g. "My Life / ... / Projects" or "Workspace"
+  url?: string;  // Direct URL to page or database in Notion
   properties?: Record<string, NotionPropertySchema>;
 }
 
-// Para manter retrocompatibilidade de nomes
+// Backward compatibility alias
 export type NotionDatabase = NotionDestination;
 
 export type NotionPropertyType =
@@ -79,14 +79,14 @@ export interface FormConfig {
   name: string;
   icon: string;
   destinationType: NotionDestinationType; // 'database' | 'page'
-  databaseId: string;                     // ID da database ou da página de destino
-  databaseTitle: string;                  // Nome da database ou da página de destino
-  destinationUrl?: string;                // Link direto no Notion
-  destinationPath?: string;               // Caminho / rota da pasta no Notion (ex: "Workspace / ... / Projects")
-  showFullPath?: boolean;                 // Exibir estrutura do caminho da pasta na lista inicial
-  pageSaveMode?: PageSaveMode;            // 'subpage' ou 'append_block' (usado quando destinationType === 'page')
-  detectExisting?: boolean;               // Verifica se a URL já existe no destino do Notion
-  clipContent: boolean;                   // true = extrai corpo do artigo, false = bookmark simples
+  databaseId: string;                     // ID of target database or page
+  databaseTitle: string;                  // Name of target database or page
+  destinationUrl?: string;                // Direct Notion link
+  destinationPath?: string;               // Notion folder/breadcrumb path (e.g. "Workspace / ... / Projects")
+  showFullPath?: boolean;                 // Show folder path hierarchy in form list
+  pageSaveMode?: PageSaveMode;            // 'subpage' or 'append_block' (when destinationType === 'page')
+  detectExisting?: boolean;               // Check whether URL already exists in Notion destination
+  clipContent: boolean;                   // true = extract article body, false = simple bookmark
   mappings: PropertyFieldMapping[];
   createdAt: number;
 }

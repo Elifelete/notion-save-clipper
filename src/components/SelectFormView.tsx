@@ -30,7 +30,6 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
 }) => {
   const [bannerClosed, setBannerClosed] = useState(false);
 
-  // Fecha o iframe embutido na página via postMessage
   const handleClose = () => {
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ action: 'NOTION_SAVE_CLOSE' }, '*');
@@ -41,20 +40,20 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
 
   return (
     <div className="flex flex-col min-h-[460px] w-full bg-[#f8f9fa] text-xs text-gray-800">
-      {/* Top Header Estilo Save.to */}
+      {/* Top Header Save.to Style */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100">
         <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
         <div className="flex items-center gap-2 text-gray-500">
           <button
             type="button"
-            title="Dicas & Atalhos"
+            title="Tips & Shortcuts"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
           </button>
           <button
             type="button"
-            title="Histórico de Páginas Salvas"
+            title="Clipping History"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
             <History className="w-4 h-4" />
@@ -62,7 +61,7 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
           <button
             type="button"
             onClick={handleClose}
-            title="Fechar"
+            title="Close"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -70,7 +69,7 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
         </div>
       </div>
 
-      {/* Banner de Feedback Azul após criar um Form (Estilo Save.to) */}
+      {/* Blue Feedback Banner after creating a Form */}
       {showBanner && (
         <div className="bg-[#e8f2fe] border-b border-blue-100 px-3.5 py-2 flex items-center justify-between text-blue-700 text-xs font-medium animate-fadeIn">
           <span>Your form is created! Try it now.</span>
@@ -89,26 +88,26 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
       )}
 
       <div className="p-3.5 space-y-3.5 flex-1">
-        {/* Título da Seção: Select Form + Ícone de Configurações */}
+        {/* Section Header: Select Form + Settings Icon */}
         <div className="flex items-center justify-between px-0.5">
           <h2 className="font-bold text-xs text-gray-700 tracking-wide">Select Form</h2>
           <button
             type="button"
             onClick={onOpenSettings}
-            title="Configurações e Conexão Notion"
+            title="Settings & Notion Connection"
             className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 rounded-full transition-colors cursor-pointer"
           >
             <Settings className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Lista de Formulários em Cards Arredondados */}
+        {/* List of Forms in Rounded Cards */}
         <div className="space-y-2">
           {forms.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-6 text-center space-y-2">
-              <p className="text-gray-500 font-medium">Nenhum formulário criado ainda.</p>
+              <p className="text-gray-500 font-medium">No forms created yet.</p>
               <p className="text-[11px] text-gray-400">
-                Clique em "+ Add New Form" abaixo para conectar uma database ou página do Notion.
+                Click "+ Add New Form" below to connect a Notion database or page.
               </p>
             </div>
           ) : (
@@ -141,7 +140,7 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    title="Abrir no Notion em nova aba"
+                    title="Open in Notion in new tab"
                     className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -159,7 +158,7 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
           )}
         </div>
 
-        {/* Botão + Add New Form */}
+        {/* Button + Add New Form */}
         <div className="pt-1">
           <button
             type="button"

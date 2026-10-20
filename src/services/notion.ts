@@ -27,7 +27,7 @@ async function notionRequest<T>(
 ): Promise<T> {
   const token = apiKey.trim();
   if (!token) {
-    throw new NotionApiError('Chave de API do Notion não informada.', 401);
+    throw new NotionApiError('Notion API key not provided.', 401);
   }
 
   const url = `${NOTION_API_BASE}${endpoint}`;
@@ -44,7 +44,7 @@ async function notionRequest<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    const errorMsg = data.message || `Erro na API do Notion (${response.status})`;
+    const errorMsg = data.message || `Notion API error (${response.status})`;
     throw new NotionApiError(errorMsg, response.status, data.code);
   }
 
@@ -52,19 +52,19 @@ async function notionRequest<T>(
 }
 
 /**
- * Valida a chave de API testando uma chamada simples
+ * Validates the API key by testing a basic call
  */
 export async function validateNotionApiKey(apiKey: string): Promise<{ valid: boolean; botName?: string; error?: string }> {
   try {
     const data = await notionRequest<{ name?: string; bot?: { owner?: any } }>(apiKey, '/users/me');
     return {
       valid: true,
-      botName: data.name || 'Integração Notion',
+      botName: data.name || 'Notion Integration',
     };
   } catch (err: any) {
     return {
       valid: false,
-      error: err.message || 'Falha ao validar token do Notion',
+      error: err.message || 'Failed to validate Notion token',
     };
   }
 }
@@ -83,7 +83,7 @@ async function resolveParentInfo(
   try {
     if (parentType === 'database_id') {
       const db = await notionRequest<any>(apiKey, `/databases/${parentId}`);
-      let title = 'Base de Dados';
+      let title = 'Database';
       if (db.title && Array.isArray(db.title) && db.title.length > 0) {
         title = db.title.map((t: any) => t.plain_text).join('');
       }
@@ -96,7 +96,7 @@ async function resolveParentInfo(
       return info;
     } else {
       const page = await notionRequest<any>(apiKey, `/pages/${parentId}`);
-      let title = 'Página';
+      let title = 'Page';
       if (page.properties) {
         for (const prop of Object.values<any>(page.properties)) {
           if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
@@ -130,7 +130,7 @@ interface RawNotionSearchItem {
 }
 
 /**
- * Busca objetos no Notion com paginação completa e filtro de tipo ('database' ou 'page')
+ * Searches Notion objects with full pagination and type filter ('database' or 'page')
  */
 async function searchNotionObjects(
   apiKey: string,
@@ -175,7 +175,7 @@ async function searchNotionObjects(
       hasMore = Boolean(response.has_more && response.next_cursor);
       startCursor = response.next_cursor || undefined;
     } catch (err) {
-      console.warn(`Erro ao buscar ${objectType}s paginados no Notion:`, err);
+      console.warn(`Error fetching paginated ${objectType}s from Notion:`, err);
       break;
     }
   }
@@ -184,7 +184,7 @@ async function searchNotionObjects(
 }
 
 /**
- * Converte itens retornados pela API do Notion em NotionDestination com hierarquia e caminhos
+ * Converts raw Notion items into NotionDestination with hierarchy and breadcrumbs
  */
 async function parseRawItemsToDestinations(
   apiKey: string,
@@ -210,7 +210,7 @@ async function parseRawItemsToDestinations(
     const itemUrl = item.url || `https://www.notion.so/${item.id.replace(/-/g, '')}`;
 
     if (item.object === 'database') {
-      let title = 'Base de Dados sem nome';
+      let title = 'Untitled Database';
       if (item.title && Array.isArray(item.title) && item.title.length > 0) {
         title = item.title.map((t: any) => t.plain_text).join('');
       }
@@ -232,7 +232,7 @@ async function parseRawItemsToDestinations(
 
       const parsed: RawNotionSearchItem = {
         id: item.id,
-        title: title || 'Base de Dados sem nome',
+        title: title || 'Untitled Database',
         icon: item.icon ? icon : '📁',
         type: 'database',
         parentId,
@@ -244,7 +244,6 @@ async function parseRawItemsToDestinations(
       rawItems.push(parsed);
       idToItemMap.set(item.id, parsed);
     } else if (item.object === 'page') {
-      // Extrai o título da página
       let title = '';
       if (item.properties) {
         for (const prop of Object.values<any>(item.properties)) {
@@ -255,7 +254,6 @@ async function parseRawItemsToDestinations(
         }
       }
 
-      // Se a página não tiver nenhum título preenchido, pula entradas em branco
       if (!title.trim()) {
         continue;
       }
@@ -275,7 +273,7 @@ async function parseRawItemsToDestinations(
     }
   }
 
-  // Resolve pais ausentes que não foram retornados diretamente na busca inicial
+  // Resolves missing parents not returned in initial search
   const missingParents = new Set<string>();
   for (const item of rawItems) {
     if (item.parentId && !idToItemMap.has(item.parentId) && item.parentType !== 'workspace') {
@@ -302,7 +300,7 @@ async function parseRawItemsToDestinations(
     );
   }
 
-  // Constrói breadcrumb hierárquico com caminho completo
+  // Builds hierarchical breadcrumbs
   return rawItems.map((item) => {
     const pathParts: string[] = [];
     let currParentId = item.parentId;
@@ -321,7 +319,7 @@ async function parseRawItemsToDestinations(
     } else if (pathParts.length >= 3) {
       path = `Workspace / ... / ${pathParts[pathParts.length - 1]}`;
     } else if (item.parentType === 'workspace') {
-      path = 'Workspace (Raiz)';
+      path = 'Workspace (Root)';
     }
 
     return {
@@ -337,7 +335,7 @@ async function parseRawItemsToDestinations(
 }
 
 /**
- * Busca todas as databases E páginas que a integração tem acesso, com paginação completa
+ * Fetches all databases and pages shared with integration with full pagination
  */
 export async function fetchDestinations(apiKey: string): Promise<NotionDestination[]> {
   const [databasesRaw, pagesRaw] = await Promise.all([
@@ -349,7 +347,7 @@ export async function fetchDestinations(apiKey: string): Promise<NotionDestinati
 }
 
 /**
- * Pesquisa no servidor do Notion por título em tempo real
+ * Searches Notion server by title in real-time
  */
 export async function searchNotionByQuery(
   apiKey: string,
@@ -368,16 +366,15 @@ export async function searchNotionByQuery(
 
     return parseRawItemsToDestinations(apiKey, response.results || []);
   } catch (err) {
-    console.warn('Erro na busca Notion por query:', err);
+    console.warn('Error during Notion search query:', err);
     return [];
   }
 }
 
-// Mantém retrocompatibilidade de chamada
 export const fetchDatabases = fetchDestinations;
 
 /**
- * Atualiza a lista de opções de uma propriedade Select ou Multi-Select na database do Notion
+ * Updates select or multi-select options in Notion database schema
  */
 export async function updateDatabasePropertyOptions(
   apiKey: string,
@@ -404,12 +401,12 @@ export async function updateDatabasePropertyOptions(
 }
 
 /**
- * Obtém os detalhes e schema de uma database específica
+ * Fetches schema and properties for a database
  */
 export async function getDatabaseSchema(apiKey: string, databaseId: string): Promise<NotionDestination> {
   const db = await notionRequest<any>(apiKey, `/databases/${databaseId}`);
 
-  let title = 'Sem título';
+  let title = 'Untitled';
   if (db.title && Array.isArray(db.title) && db.title.length > 0) {
     title = db.title.map((t: any) => t.plain_text).join('');
   }
@@ -424,7 +421,7 @@ export async function getDatabaseSchema(apiKey: string, databaseId: string): Pro
         select: prop.select,
         multi_select: prop.multi_select,
         status: prop.status,
-            options: prop.multi_select?.options || prop.select?.options || prop.status?.options || [],
+        options: prop.multi_select?.options || prop.select?.options || prop.status?.options || [],
       };
     }
   }
@@ -440,7 +437,7 @@ export async function getDatabaseSchema(apiKey: string, databaseId: string): Pro
 }
 
 /**
- * Formata um valor simples para o payload da Notion API
+ * Formats a property value for Notion API payload
  */
 export function formatNotionPropertyValue(type: string, value: any) {
   if (value === undefined || value === null || value === '') {
@@ -524,7 +521,7 @@ export interface CreatePageParams {
 }
 
 /**
- * Salva no Notion: em Database ou em Página comum (Sub-página ou Append), com suporte a paginação de blocos
+ * Saves to Notion: into a database or into a regular page (subpage or append), with block batching
  */
 export async function createPage(params: CreatePageParams): Promise<{ id: string; url: string }> {
   const {
@@ -541,11 +538,10 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
     contentBlocks = [],
   } = params;
 
-  // CASO 1: Destino é uma PÁGINA e o modo é Inserir no final da página (Append)
+  // CASE 1: Destination is a PAGE and mode is Append
   if (destinationType === 'page' && pageSaveMode === 'append_block') {
     const blocksToAppend: any[] = [];
 
-    // Bloco Callout ou Bookmark com o link
     if (url) {
       blocksToAppend.push({
         object: 'block',
@@ -570,7 +566,6 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
       blocksToAppend.push(...contentBlocks);
     }
 
-    // Envia o primeiro lote de até 100 blocos
     await notionRequest<any>(apiKey, `/blocks/${destinationId}/children`, {
       method: 'PATCH',
       body: {
@@ -578,7 +573,6 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
       },
     });
 
-    // Se houver mais de 100 blocos, anexa os excedentes em lotes subsequentes
     if (blocksToAppend.length > 100) {
       for (let i = 100; i < blocksToAppend.length; i += 100) {
         const batch = blocksToAppend.slice(i, i + 100);
@@ -596,13 +590,13 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
     };
   }
 
-  // CASO 2: Destino é uma PÁGINA como Sub-página
+  // CASE 2: Destination is a PAGE as Sub-page
   if (destinationType === 'page') {
     const payload: any = {
       parent: { page_id: destinationId },
       properties: {
         title: {
-          title: [{ type: 'text', text: { content: title || 'Página salva' } }],
+          title: [{ type: 'text', text: { content: title || 'Saved Page' } }],
         },
       },
     };
@@ -630,7 +624,6 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
       body: payload,
     });
 
-    // Anexa blocos excedentes (acima de 100)
     if (contentBlocks && contentBlocks.length > 100) {
       for (let i = 100; i < contentBlocks.length; i += 100) {
         const batch = contentBlocks.slice(i, i + 100);
@@ -647,7 +640,7 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
     };
   }
 
-  // CASO 3: Destino é uma DATABASE
+  // CASE 3: Destination is a DATABASE
   const formattedProperties: Record<string, any> = {};
 
   for (const [propName, propData] of Object.entries(properties)) {
@@ -685,7 +678,6 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
     body: payload,
   });
 
-  // Anexa blocos excedentes (acima de 100)
   if (contentBlocks && contentBlocks.length > 100) {
     for (let i = 100; i < contentBlocks.length; i += 100) {
       const batch = contentBlocks.slice(i, i + 100);
@@ -703,7 +695,7 @@ export async function createPage(params: CreatePageParams): Promise<{ id: string
 }
 
 /**
- * Verifica se já existe uma página cadastrada com a URL informada na Database ou destino
+ * Checks if a page with the given URL has already been saved to the database
  */
 export async function findExistingPageByUrl(
   apiKey: string,
@@ -717,7 +709,6 @@ export async function findExistingPageByUrl(
   try {
     if (destinationType === 'database') {
       const db = await getDatabaseSchema(apiKey, destinationId);
-      // Procura propriedade do tipo 'url'
       const urlProp = Object.values(db.properties || {}).find((p) => p.type === 'url');
 
       if (urlProp) {
@@ -740,7 +731,7 @@ export async function findExistingPageByUrl(
 
         if (queryRes.results && queryRes.results.length > 0) {
           const item = queryRes.results[0];
-          let title = 'Item existente';
+          let title = 'Existing Item';
           if (item.properties) {
             for (const prop of Object.values<any>(item.properties)) {
               if (prop.type === 'title' && Array.isArray(prop.title) && prop.title.length > 0) {
@@ -758,10 +749,9 @@ export async function findExistingPageByUrl(
       }
     }
 
-    // Se não encontrou por propriedade de URL exata, NÃO faz busca genérica que gera falsos positivos!
     return null;
   } catch (err) {
-    console.warn('Erro ao verificar duplicidade de página:', err);
+    console.warn('Error checking duplicate page:', err);
     return null;
   }
 }

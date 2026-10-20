@@ -53,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onBackToSave}
             className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
           >
-            ← Voltar
+            ← Back
           </button>
         )}
       </div>
@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
         {currentView === 'save' && (
           <button
             onClick={onOpenCreateForm}
-            title="Criar novo Formulário"
+            title="Create New Form"
             className="flex items-center gap-1 text-[11px] font-medium text-gray-600 hover:text-black bg-gray-50 hover:bg-gray-100 border border-gray-200 px-2 py-1 rounded-md transition-colors cursor-pointer"
           >
             <PlusCircle className="w-3.5 h-3.5 text-blue-600" />
@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={onOpenSettings}
-          title="Configurações & Chave API"
+          title="Settings & API Key"
           className={`p-1.5 rounded-md transition-colors cursor-pointer ${
             currentView === 'settings'
               ? 'bg-gray-200 text-black'

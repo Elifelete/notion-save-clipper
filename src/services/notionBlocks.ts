@@ -1,5 +1,5 @@
 /**
- * Conversor de HTML e nós DOM para blocos estruturados da Notion API v1
+ * Converter from HTML and DOM nodes to structured Notion API v1 blocks
  */
 
 interface NotionRichTextItem {
@@ -19,7 +19,7 @@ interface NotionRichTextItem {
 }
 
 /**
- * Converte elementos inline com formatação (strong, em, code, a) para Notion rich_text
+ * Converts inline elements with formatting (strong, em, code, a) to Notion rich_text
  */
 export function domToRichText(node: Node): NotionRichTextItem[] {
   const result: NotionRichTextItem[] = [];
@@ -33,7 +33,7 @@ export function domToRichText(node: Node): NotionRichTextItem[] {
       const text = currNode.textContent || '';
       if (!text) return;
 
-      // Notion API aceita no máximo 2000 caracteres por bloco de texto
+      // Notion API accepts at most 2000 characters per text block
       const chunks = text.match(/.{1,1900}/g) || [text];
       for (const chunk of chunks) {
         result.push({
@@ -89,7 +89,7 @@ export function domToRichText(node: Node): NotionRichTextItem[] {
 }
 
 /**
- * Converte HTML de um artigo para um array de blocos nativos do Notion
+ * Converts article HTML to an array of native Notion blocks
  */
 export function htmlToNotionBlocks(htmlString: string): any[] {
   if (!htmlString || typeof window === 'undefined') return [];
@@ -101,7 +101,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
   function processElement(el: HTMLElement) {
     const tag = el.tagName.toLowerCase();
 
-    // 1. Títulos
+    // 1. Headings
     if (tag === 'h1') {
       const richText = domToRichText(el);
       if (richText.length > 0) {
@@ -138,7 +138,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // 2. Parágrafos
+    // 2. Paragraphs
     if (tag === 'p') {
       const richText = domToRichText(el);
       if (richText.length > 0) {
@@ -151,7 +151,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // 3. Citações (Blockquote)
+    // 3. Quotes (Blockquote)
     if (tag === 'blockquote') {
       const richText = domToRichText(el);
       if (richText.length > 0) {
@@ -164,7 +164,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // 4. Listas não-ordenadas (ul)
+    // 4. Bulleted Lists (ul)
     if (tag === 'ul') {
       const lis = el.querySelectorAll(':scope > li');
       for (const li of Array.from(lis)) {
@@ -180,7 +180,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // 5. Listas numeradas (ol)
+    // 5. Numbered Lists (ol)
     if (tag === 'ol') {
       const lis = el.querySelectorAll(':scope > li');
       for (const li of Array.from(lis)) {
@@ -196,7 +196,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // 6. Blocos de Código (pre code)
+    // 6. Code Blocks (pre code)
     if (tag === 'pre') {
       const codeEl = el.querySelector('code') || el;
       const codeText = codeEl.textContent || '';
@@ -213,7 +213,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // 7. Imagens (img)
+    // 7. Images (img)
     if (tag === 'img') {
       const src = el.getAttribute('src');
       if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
@@ -229,7 +229,7 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // 8. Divisores (hr)
+    // 8. Dividers (hr)
     if (tag === 'hr') {
       blocks.push({
         object: 'block',
@@ -239,9 +239,9 @@ export function htmlToNotionBlocks(htmlString: string): any[] {
       return;
     }
 
-    // Recursão para elementos contêineres como div, section, article, main
+    // Recursion for container elements (div, section, article, main)
     for (const child of Array.from(el.children)) {
-      if (blocks.length >= 95) break; // Limite de segurança de blocos por requisição
+      if (blocks.length >= 95) break; // Block safety threshold per request
       processElement(child as HTMLElement);
     }
   }

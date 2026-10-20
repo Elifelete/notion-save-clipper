@@ -1,5 +1,5 @@
 export default defineBackground(() => {
-  // Escuta mensagens para captura de tela (Screenshot da aba ativa)
+  // Listen for messages to capture visible screen (screenshot)
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.action === 'CAPTURE_VISIBLE_TAB') {
       chrome.tabs.captureVisibleTab(
@@ -7,7 +7,7 @@ export default defineBackground(() => {
         { format: 'png' },
         (dataUrl) => {
           if (chrome.runtime.lastError || !dataUrl) {
-            sendResponse({ success: false, error: chrome.runtime.lastError?.message || 'Falha ao capturar tela' });
+            sendResponse({ success: false, error: chrome.runtime.lastError?.message || 'Failed to capture screen' });
           } else {
             sendResponse({ success: true, dataUrl });
           }
@@ -17,12 +17,12 @@ export default defineBackground(() => {
     }
   });
 
-  // Desativa o popup nativo do navegador para permitir o modal fixo injetado na página (estilo Save.to)
+  // Disables native popup to enable page-injected overlay (Save.to style)
   const disableNativePopup = () => {
     try {
       chrome.action.setPopup({ popup: '' });
     } catch (e) {
-      console.warn('Erro ao configurar popup da extensão:', e);
+      console.warn('Error configuring extension popup:', e);
     }
   };
 
@@ -30,27 +30,27 @@ export default defineBackground(() => {
   chrome.runtime.onStartup.addListener(disableNativePopup);
   disableNativePopup();
 
-  // Ao clicar no ícone da extensão na barra do Chrome:
+  // On clicking extension icon in toolbar:
   chrome.action.onClicked.addListener(async (tab) => {
     const tabId = tab.id;
     if (!tabId || !tab.url) return;
 
-    // Páginas restritas pelo Chrome (ex: chrome://extensions)
+    // Restricted browser internal pages (e.g. chrome://extensions)
     if (
       tab.url.startsWith('chrome://') ||
       tab.url.startsWith('chrome-extension://') ||
       tab.url.startsWith('edge://') ||
       tab.url.startsWith('about:')
     ) {
-      alert('O Notion Save precisa ser aberto em uma página web (não em páginas internas do Chrome).');
+      alert('Notion Save must be opened on a standard web page (not browser internal pages).');
       return;
     }
 
     try {
-      // Tenta enviar mensagem para o content script existente
+      // Send toggle message to existing content script
       await chrome.tabs.sendMessage(tabId, { action: 'TOGGLE_OVERLAY' });
     } catch {
-      // Se o content script ainda não foi injetado (ex: aba aberta antes de carregar a extensão)
+      // Inject content script if not already present
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
@@ -60,11 +60,11 @@ export default defineBackground(() => {
           try {
             await chrome.tabs.sendMessage(tabId, { action: 'TOGGLE_OVERLAY' });
           } catch (e) {
-            console.error('Falha ao acionar modal do Notion Save:', e);
+            console.error('Failed to trigger Notion Save overlay:', e);
           }
         }, 100);
       } catch (err) {
-        console.error('Erro ao injetar script do Notion Save:', err);
+        console.error('Error injecting Notion Save script:', err);
       }
     }
   });

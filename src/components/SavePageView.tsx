@@ -64,11 +64,11 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     isSocialPost || form.clipContent ? 'content' : 'bookmark'
   );
 
-  // Expansão de campos extras (Save.to: "⌅ 4 more fields")
+  // Expandable extra fields (Save.to: "⌅ 4 more fields")
   const [showMoreFields, setShowMoreFields] = useState(false);
   const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false);
 
-  // Extração de artigo
+  // Article extraction
   const [articleData, setArticleData] = useState<ArticleParsedContent | null>(null);
   const [loadingArticle, setLoadingArticle] = useState(false);
 
@@ -76,14 +76,14 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   const [savedPageInfo, setSavedPageInfo] = useState<{ id: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Detecção de página já salva (Anti-duplicidade)
+  // Anti-duplication check
   const [existingPage, setExistingPage] = useState<{ id: string; url: string; title: string } | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
 
-  // Captura de tela ativa (Screenshot)
+  // Screenshot capture status
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
 
-  // Trecho selecionado / Highlighter
+  // Highlighted text excerpt
   const [selectedHighlight, setSelectedHighlight] = useState<string>(metadata.selectedText || '');
 
   const handleOptionsUpdate = async (propertyId: string, newOptions: NotionPropertyOption[]) => {
@@ -94,11 +94,11 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
       const updatedForm = { ...form, mappings: updatedMappings };
       await saveForm(updatedForm);
     } catch (err) {
-      console.warn('Falha ao persistir opções no formulário:', err);
+      console.warn('Failed to update property options in form:', err);
     }
   };
 
-  // Permite cancelar o seletor mesmo se o foco estiver dentro do iframe ao pressionar ESC
+  // Close element picker when pressing ESC inside iframe
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
@@ -112,7 +112,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Escuta mensagem de seleção ou seletor de elemento do content script
+  // Listens to selection or custom area picker events from content script
   useEffect(() => {
     const handleMsg = (event: MessageEvent) => {
       if (event.data?.action === 'NOTION_SAVE_SET_SELECTION' && event.data.selectedText) {
@@ -141,7 +141,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     }
   };
 
-  // Verifica se o link já foi salvo (se a opção detectExisting estiver ativa no formulário)
+  // Check if current URL was already saved
   useEffect(() => {
     if (form.detectExisting === false) return;
     if (!url || !url.startsWith('http')) return;
@@ -160,7 +160,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           setExistingPage(match);
         }
       } catch (err) {
-        console.warn('Erro ao checar duplicidade:', err);
+        console.warn('Error checking duplication:', err);
       } finally {
         if (isMounted) {
           setCheckingExisting(false);
@@ -176,7 +176,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
 
   const draftKey = `notion_save_draft_${form.id}_${metadata.url || url}`;
 
-  // Inicializa dados e restaura rascunho persistido para evitar perda ao clicar fora
+  // Initialize data and restore persisted draft
   useEffect(() => {
     let initialTitle = metadata.title || '';
     let initialUrl = metadata.url || '';
@@ -195,7 +195,6 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
       }
     }
 
-    // Tenta restaurar rascunho salvo anteriormente (exceto se for post de rede social recém-clicado)
     if (!metadata.socialPost) {
       try {
         const savedDraft = localStorage.getItem(draftKey);
@@ -209,7 +208,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           if (parsed.propertyValues) Object.assign(initialProps, parsed.propertyValues);
         }
       } catch (e) {
-        // Ignora erro de parsing
+        // Ignore parsing errors
       }
     }
 
@@ -223,7 +222,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     setSavedPageInfo(null);
     setError(null);
 
-    // Pré-carrega artigo se necessário
+    // Preload article if configured
     if (form.clipContent && !isSocial) {
       setLoadingArticle(true);
       getActiveTabArticle()
@@ -241,7 +240,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
     }
   }, [metadata, form, draftKey, specialType]);
 
-  // Persiste rascunho a cada alteração
+  // Persist draft on changes
   useEffect(() => {
     if (!title && !description) return;
     try {
@@ -275,21 +274,21 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         const res = await new Promise<{ success: boolean; dataUrl?: string; error?: string }>((resolve) => {
           chrome.runtime.sendMessage({ action: 'CAPTURE_VISIBLE_TAB' }, (response) => {
-            resolve(response || { success: false, error: 'Sem resposta do background script' });
+            resolve(response || { success: false, error: 'No response from background script' });
           });
         });
 
         if (res.success && res.dataUrl) {
           setCoverUrl(res.dataUrl);
         } else {
-          setError(res.error || 'Não foi possível capturar a tela.');
+          setError(res.error || 'Failed to capture screen.');
         }
       } else {
         setCoverUrl('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200');
       }
     } catch (e: any) {
       setCapturingScreenshot(false);
-      setError(e.message || 'Erro ao capturar tela.');
+      setError(e.message || 'Error capturing screenshot.');
     } finally {
       setCapturingScreenshot(false);
     }
@@ -305,7 +304,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('O título da página é obrigatório.');
+      setError('Page title is required.');
       return;
     }
 
@@ -359,28 +358,29 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         }
       }
 
-      // Verifica se a propriedade 'Description' já está sendo salva na coluna da tabela do Notion
+      // Check if description is already written to a database column
       const hasDescriptionPropertyInDatabase = Object.keys(propertiesPayload).some(
         (key) =>
           key.toLowerCase() === 'description' ||
           key.toLowerCase() === 'descrição' ||
           key.toLowerCase() === 'descricao' ||
           key.toLowerCase() === 'resumo' ||
-          key.toLowerCase() === 'legenda'
+          key.toLowerCase() === 'legenda' ||
+          key.toLowerCase() === 'caption'
       );
 
-      // Preparação dos blocos
+      // Prepare blocks
       const contentBlocks: any[] = [];
 
       if (isSocialPost && url) {
-        // 1. Bloco Embed interativo (Iframe nativo no canvas do Notion - resolve o problema das imagens expirarem!)
+        // 1. Embed interactive iframe block
         contentBlocks.push({
           object: 'block',
           type: 'embed',
           embed: { url },
         });
 
-        // 2. Legenda / Caption preservada no corpo do Notion (SEMPRE inclui a legenda no canvas em posts de redes sociais!)
+        // 2. Full post caption in canvas as quote blocks
         if (description) {
           const chunks = description.match(/[\s\S]{1,1900}/g) || [description];
           for (const chunk of chunks) {
@@ -394,7 +394,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           }
         }
 
-        // 3. Card informativo com Autor, ID do post e Link direto
+        // 3. Informative metadata card with author, post ID and source link
         const socialData = metadata.socialPost;
         const authorText = socialData?.username ? `@${socialData.username}` : (metadata.author || '');
         const postIdText = socialData?.postId ? ` • ID: ${socialData.postId}` : '';
@@ -411,7 +411,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
               rich_text: [
                 {
                   type: 'text',
-                  text: { content: `Post de ${authorText}${postIdText}\n` },
+                  text: { content: `Post by ${authorText}${postIdText}\n` },
                   annotations: { bold: true },
                 },
                 {
@@ -480,7 +480,6 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             bookmark: { url },
           });
         }
-        // No modo Bookmark, se a Description já foi salva como propriedade da tabela, NÃO duplica no corpo!
         if (description && !hasDescriptionPropertyInDatabase) {
           contentBlocks.push({
             object: 'block',
@@ -506,7 +505,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         contentBlocks: contentBlocks.length > 0 ? contentBlocks : undefined,
       });
 
-      // Limpa rascunho após salvar com sucesso
+      // Clear draft on successful save
       try {
         localStorage.removeItem(draftKey);
       } catch (e) {
@@ -515,12 +514,11 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
 
       setSavedPageInfo(result);
 
-      // Notifica a página para atualizar o status do botão no post
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ action: 'NOTION_SAVE_POST_SAVED', url: result.url }, '*');
       }
     } catch (err: any) {
-      setError(err.message || 'Falha ao salvar no Notion.');
+      setError(err.message || 'Failed to save to Notion.');
     } finally {
       setSaving(false);
     }
@@ -545,20 +543,20 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
 
   return (
     <div className="flex flex-col min-h-[480px] w-full bg-[#f8f9fa] text-xs text-gray-800">
-      {/* Top Header Estilo Save.to */}
+      {/* Top Header Save.to Style */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100">
         <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
         <div className="flex items-center gap-2 text-gray-500">
           <button
             type="button"
-            title="Dicas & Atalhos"
+            title="Tips & Shortcuts"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
           </button>
           <button
             type="button"
-            title="Histórico de Páginas Salvas"
+            title="Clipping History"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
             <History className="w-4 h-4" />
@@ -566,7 +564,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           <button
             type="button"
             onClick={handleClose}
-            title="Fechar"
+            title="Close"
             className="p-1 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -574,12 +572,12 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         </div>
       </div>
 
-      {/* Barra de Navegação do Formulário: [<] [📛 Form Name] [🔗] [⚙️] */}
+      {/* Form Navigation Bar: [<] [📛 Form Name] [🔗] [⚙️] */}
       <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-gray-200">
         <button
           type="button"
           onClick={onBackToSelectForm}
-          title="Trocar de Formulário"
+          title="Switch Form"
           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-700 transition-colors cursor-pointer"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -595,7 +593,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             href={form.destinationUrl || `https://www.notion.so/${form.databaseId.replace(/-/g, '')}`}
             target="_blank"
             rel="noreferrer"
-            title="Abrir no Notion em nova aba"
+            title="Open in Notion in new tab"
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -603,7 +601,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           <button
             type="button"
             onClick={onEditForm ? () => onEditForm(form) : onOpenSettings}
-            title="Configurações do Formulário"
+            title="Form Settings"
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
           >
             <Settings className="w-4 h-4" />
@@ -611,7 +609,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         </div>
       </div>
 
-      {/* Banner de Post de Rede Social (Twitter / Instagram) */}
+      {/* Social Media Post Banner (Twitter / Instagram) */}
       {isSocialPost && (
         <div className="mx-3.5 mt-2.5 p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-center justify-between gap-2 text-xs text-blue-900 shadow-2xs animate-fadeIn">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -622,13 +620,13 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
               <div className="font-semibold text-[11px] text-blue-900 truncate">
                 {metadata.socialPost?.username
                   ? `@${metadata.socialPost.username}`
-                  : (specialType === 'twitter' ? 'Tweet do X' : 'Post do Instagram')}
+                  : (specialType === 'twitter' ? 'Post on X' : 'Post on Instagram')}
                 {metadata.socialPost?.postId && (
                   <span className="ml-1.5 font-normal text-blue-600/80">#{metadata.socialPost.postId}</span>
                 )}
               </div>
               <div className="text-[10px] text-blue-600 truncate">
-                Iframe interativo no canvas (mídias não expiram)
+                Interactive iframe on canvas (media won't expire)
               </div>
             </div>
           </div>
@@ -638,13 +636,13 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
         </div>
       )}
 
-      {/* Banner de Alerta: Página Já Salva (Anti-Duplicidade) */}
+      {/* Anti-Duplication Alert Banner */}
       {existingPage && (
         <div className="mx-3.5 mt-2.5 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start justify-between gap-2 text-xs text-amber-900 shadow-2xs animate-fadeIn">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <div className="font-semibold text-[11px] text-amber-800">Este link já foi salvo anteriormente!</div>
+              <div className="font-semibold text-[11px] text-amber-800">This page was already saved previously!</div>
               <div className="text-[11px] text-amber-700 truncate max-w-[210px] mt-0.5">
                 "{existingPage.title}"
               </div>
@@ -656,19 +654,19 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             rel="noreferrer"
             className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-md font-semibold text-[10px] shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
           >
-            <span>Ver</span>
+            <span>View</span>
             <ExternalLink className="w-2.5 h-2.5" />
           </a>
         </div>
       )}
 
-      {/* Banner de Trecho Destacado (Highlighter) */}
+      {/* Highlighter Excerpt Banner */}
       {selectedHighlight && clipAction === 'selection' && (
         <div className="mx-3.5 mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between text-xs text-blue-900 shadow-2xs">
           <div className="flex items-center gap-1.5 truncate">
             <Highlighter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
             <span className="text-[11px] text-blue-800 font-medium truncate">
-              Trecho selecionado capturado
+              Captured selected text excerpt
             </span>
           </div>
           <button
@@ -679,19 +677,19 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             }}
             className="text-[10px] text-blue-600 hover:underline cursor-pointer"
           >
-            Limpar
+            Clear
           </button>
         </div>
       )}
 
-      {/* Notificação de Sucesso */}
+      {/* Success Notification */}
       {savedPageInfo && (
         <div className="m-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 text-xs text-emerald-900 shadow-2xs animate-fadeIn">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <div>
-              <div className="font-bold text-emerald-800">Página Salva no Notion!</div>
-              <div className="text-[11px] text-emerald-700">O conteúdo foi sincronizado com sucesso.</div>
+              <div className="font-bold text-emerald-800">Page Saved to Notion!</div>
+              <div className="text-[11px] text-emerald-700">Content was synced successfully.</div>
             </div>
           </div>
           <a
@@ -700,27 +698,27 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             rel="noreferrer"
             className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
           >
-            <span>Abrir</span>
+            <span>Open</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>
       )}
 
-      {/* Notificação de Erro */}
+      {/* Error Notification */}
       {error && (
         <div className="m-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2 text-xs text-red-900 shadow-2xs">
           <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
-            <div className="font-bold text-red-800">Erro ao salvar</div>
+            <div className="font-bold text-red-800">Error saving page</div>
             <div className="text-red-700 break-words">{error}</div>
           </div>
         </div>
       )}
 
-      {/* Formulário Principal Estilo Save.to */}
+      {/* Main Save Form */}
       <form onSubmit={handleSave} className="flex-1 flex flex-col justify-between p-3.5 space-y-3">
         <div className="space-y-3">
-          {/* Campo Title (com ícone da página) */}
+          {/* Title Field */}
           <div className="space-y-1">
             <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
               <Type className="w-3.5 h-3.5 text-gray-400" />
@@ -744,13 +742,13 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Título da página..."
+                placeholder="Page title..."
                 className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
               />
             </div>
           </div>
 
-          {/* Campo URL */}
+          {/* URL Field */}
           <div className="space-y-1">
             <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
               <Link2 className="w-3.5 h-3.5 text-gray-400" />
@@ -765,7 +763,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             />
           </div>
 
-          {/* Campo Tags (Select / Multi-Select / Status em destaque) */}
+          {/* Tags Field (Select / Multi-Select / Status) */}
           {tagMapping && (
             <PropertyField
               mapping={tagMapping}
@@ -777,7 +775,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             />
           )}
 
-          {/* Campo Description */}
+          {/* Description Field */}
           <div className="space-y-1">
             <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
               <AlignLeft className="w-3.5 h-3.5 text-gray-400" />
@@ -792,10 +790,10 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             />
           </div>
 
-          {/* Campos Ocultos / Expandíveis (Save.to: "⌅ 4 more fields") */}
+          {/* Expandable Fields (Save.to: "⌅ 4 more fields") */}
           {showMoreFields ? (
             <div className="space-y-3 pt-1 border-t border-gray-100 animate-fadeIn">
-              {/* Content Image (🖼️ Content Image) */}
+              {/* Content Image */}
               <div className="space-y-1">
                 <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
                   <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
@@ -805,7 +803,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                   <div
                     onClick={() => setIsCoverPickerOpen(true)}
                     className="w-12 h-12 rounded-lg border border-gray-200 bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer overflow-hidden transition-colors shadow-2xs group relative"
-                    title="Escolher imagem da página"
+                    title="Choose image from page"
                   >
                     {coverUrl ? (
                       <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
@@ -819,14 +817,14 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                       onClick={handleCaptureScreenshot}
                       disabled={capturingScreenshot}
                       className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-md text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                      title="Tirar print da tela visível e usar como cover"
+                      title="Capture visible viewport screenshot as cover"
                     >
                       {capturingScreenshot ? (
                         <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
                       ) : (
                         <Camera className="w-3 h-3 text-gray-500" />
                       )}
-                      <span>{capturingScreenshot ? 'Capturando...' : 'Capturar Screenshot'}</span>
+                      <span>{capturingScreenshot ? 'Capturing...' : 'Capture Screenshot'}</span>
                     </button>
                     {coverUrl && (
                       <button
@@ -834,14 +832,14 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                         onClick={() => setCoverUrl(undefined)}
                         className="text-[10px] text-gray-400 hover:text-red-500 underline cursor-pointer text-left"
                       >
-                        Remover Imagem
+                        Remove Image
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Icon (🖼️ Icon) */}
+              {/* Icon */}
               <div className="space-y-1">
                 <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
                   <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
@@ -856,7 +854,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                 </div>
               </div>
 
-              {/* Clip Action (📄 Clip Action - Opções Estilo Save.to) */}
+              {/* Clip Action */}
               <div className="space-y-1">
                 <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
                   <FileText className="w-3.5 h-3.5 text-gray-400" />
@@ -864,7 +862,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                 </label>
 
                 <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-2xs overflow-hidden">
-                  {/* Opção 1: Bookmark */}
+                  {/* Option 1: Bookmark */}
                   <label
                     onClick={() => setClipAction('bookmark')}
                     className={`flex items-center justify-between p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
@@ -884,7 +882,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                     )}
                   </label>
 
-                  {/* Opção 2: Save Webpage Content */}
+                  {/* Option 2: Save Webpage Content */}
                   <label
                     onClick={() => setClipAction('content')}
                     className={`flex items-center justify-between p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
@@ -895,16 +893,16 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                       <FileText className={`w-3.5 h-3.5 ${clipAction === 'content' ? 'text-blue-600' : 'text-gray-400'}`} />
                       <div>
                         <div className="text-[11px]">
-                          {isSocialPost ? 'Incorporar Post (Embed/Iframe)' : 'Save Webpage Content'}
+                          {isSocialPost ? 'Embed Post (Interactive Iframe)' : 'Save Webpage Content'}
                         </div>
                         {articleData && !isSocialPost && (
                           <div className="text-[10px] text-blue-600 font-normal">
-                            ~{articleData.readingTimeMinutes} min • {articleData.wordCount} palavras
+                            ~{articleData.readingTimeMinutes} min • {articleData.wordCount} words
                           </div>
                         )}
                         {isSocialPost && (
                           <div className="text-[10px] text-blue-600 font-normal">
-                            Renderiza iframe interativo no Notion
+                            Renders interactive iframe in Notion
                           </div>
                         )}
                       </div>
@@ -918,20 +916,20 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                     )}
                   </label>
 
-                  {/* Opção 3: Save custom area on webpage */}
+                  {/* Option 3: Save custom area on webpage */}
                   <div
                     onClick={handleStartCustomAreaPicker}
                     className={`flex items-center justify-between p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
                       clipAction === 'selection' ? 'bg-blue-50/40 text-blue-900 font-semibold' : 'text-gray-700'
                     }`}
-                    title="Clique para selecionar visualmente uma área ou elemento na página"
+                    title="Click to visually inspect and select an element on the page"
                   >
                     <div className="flex items-center gap-2">
                       <Scissors className={`w-3.5 h-3.5 ${clipAction === 'selection' ? 'text-blue-600' : 'text-gray-400'}`} />
                       <div>
                         <div className="text-[11px]">Save custom area on webpage</div>
                         <div className="text-[10px] text-gray-400 font-normal">
-                          {selectedHighlight ? 'Área capturada!' : 'Clique para apontar e clicar na página'}
+                          {selectedHighlight ? 'Area captured!' : 'Click to point and select on page'}
                         </div>
                       </div>
                     </div>
@@ -946,7 +944,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                 </div>
               </div>
 
-              {/* Demais Propriedades Customizadas da Database */}
+              {/* Custom Database Mappings */}
               {customDatabaseMappings.map((mapping) => (
                 <PropertyField
                   key={mapping.notionPropertyId}
@@ -959,18 +957,18 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
                 />
               ))}
 
-              {/* Botão para Ocultar os Campos Extras */}
+              {/* Hide fields button */}
               <button
                 type="button"
                 onClick={() => setShowMoreFields(false)}
                 className="w-full py-1.5 flex items-center justify-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
               >
                 <ChevronUp className="w-3.5 h-3.5" />
-                <span>Ocultar campos</span>
+                <span>Hide fields</span>
               </button>
             </div>
           ) : (
-            /* Botão Expandir Campos Extras Estilo Save.to: "⌅ X more fields" */
+            /* Expand fields button */
             <button
               type="button"
               onClick={() => setShowMoreFields(true)}
@@ -982,7 +980,7 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
           )}
         </div>
 
-        {/* Botão de Submissão Estilo Save.to */}
+        {/* Submit Button */}
         <div className="pt-2 border-t border-gray-100">
           <button
             type="submit"
@@ -992,16 +990,16 @@ export const SavePageView: React.FC<SavePageViewProps> = ({
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Salvando no Notion...</span>
+                <span>Saving to Notion...</span>
               </>
             ) : (
-              <span>Salvar no Notion</span>
+              <span>Save to Notion</span>
             )}
           </button>
         </div>
       </form>
 
-      {/* Modal Seletor de Capa */}
+      {/* Cover Image Picker Modal */}
       <CoverImagePicker
         isOpen={isCoverPickerOpen}
         currentCover={coverUrl}

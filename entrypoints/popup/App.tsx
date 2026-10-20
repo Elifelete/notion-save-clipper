@@ -16,7 +16,7 @@ export default function App() {
   const [metadata, setMetadata] = useState<ExtractedMetadata | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Telas: 'select_form' (Home estilo Save.to), 'save' (Save to Notion), 'create_form', 'settings'
+  // Views: 'select_form' (Home style Save.to), 'save' (Save to Notion), 'create_form', 'settings'
   const [currentView, setCurrentView] = useState<'select_form' | 'save' | 'settings' | 'create_form'>('save');
   const [previousView, setPreviousView] = useState<'select_form' | 'save' | 'create_form' | 'settings'>('save');
   const [justCreatedFormName, setJustCreatedFormName] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export default function App() {
         setCurrentView('save');
       }
     } catch (e) {
-      console.error('Erro ao inicializar extensão:', e);
+      console.error('Error initializing extension:', e);
     } finally {
       setLoading(false);
     }
@@ -55,20 +55,20 @@ export default function App() {
     loadInitialData();
   }, []);
 
-  // Notifica o host sobre carregamento e escuta postMessage com dados de posts sociais
+  // Notifies the host on load and listens to postMessage with social post data
   useEffect(() => {
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ action: 'NOTION_SAVE_POPUP_READY' }, '*');
     }
 
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.action === 'NOTION_SAVE_SET_SOCIAL_POST' && event.data.post) {
-        const post = event.data.post as SocialPostData;
+      if (event.data?.action === 'NOTION_SAVE_SET_SOCIAL_POST' && event.data.socialPost) {
+        const post = event.data.socialPost as SocialPostData;
         setMetadata((prev) => ({
           title:
             post.platform === 'twitter'
-              ? `Post de @${post.username} no X`
-              : `Post de @${post.username} no Instagram`,
+              ? `Post by @${post.username} on X`
+              : `Post by @${post.username} on Instagram`,
           url: post.postUrl,
           description: post.caption,
           author: `@${post.username}`,
@@ -84,7 +84,7 @@ export default function App() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Notifica dinamicamente a página hospedeira sobre a altura necessária do iframe (elimina espaços em branco e barras de rolagem)
+  // Dynamically notifies host page about required iframe height to prevent whitespace / unwanted scrollbars
   useEffect(() => {
     const notifyHeight = () => {
       const contentEl = document.getElementById('root');
@@ -209,7 +209,7 @@ export default function App() {
   return (
     <div className="flex flex-col w-full bg-[#f8f9fa] font-sans text-gray-900 select-none overflow-x-hidden">
       <main className="w-full flex flex-col">
-        {/* TELA 1: Select Form (Home) */}
+        {/* VIEW 1: Select Form (Home) */}
         {currentView === 'select_form' && (
           <SelectFormView
             forms={forms}
@@ -221,7 +221,7 @@ export default function App() {
           />
         )}
 
-        {/* TELA 2: Save Page (Save to Notion) */}
+        {/* VIEW 2: Save Page (Save to Notion) */}
         {currentView === 'save' && (
           selectedForm && metadata ? (
             <SavePageView
@@ -234,18 +234,18 @@ export default function App() {
             />
           ) : (
             <div className="p-6 text-center space-y-3 bg-white flex flex-col items-center justify-center min-h-[300px]">
-              <p className="text-gray-500 text-xs">Nenhum formulário ativo selecionado.</p>
+              <p className="text-gray-500 text-xs">No active form selected.</p>
               <button
                 onClick={handleOpenCreateForm}
                 className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg cursor-pointer"
               >
-                Criar Formulário
+                Create Form
               </button>
             </div>
           )
         )}
 
-        {/* TELA 3: Create or Edit Form */}
+        {/* VIEW 3: Create or Edit Form */}
         {currentView === 'create_form' && (
           <CreateFormView
             apiKey={apiKey}
@@ -256,7 +256,7 @@ export default function App() {
           />
         )}
 
-        {/* TELA 4: Settings & Conexão Notion */}
+        {/* VIEW 4: Settings & Notion Connection */}
         {currentView === 'settings' && (
           <SettingsView
             onApiKeySaved={handleApiKeySaved}

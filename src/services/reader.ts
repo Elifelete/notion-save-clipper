@@ -9,11 +9,11 @@ export interface ArticleParsedContent {
   textContent: string;
   wordCount: number;
   readingTimeMinutes: number;
-  blocks: any[]; // Blocos estruturados da Notion API v1
+  blocks: any[]; // Structured Notion API v1 blocks
 }
 
 /**
- * Detecta se a URL pertence a serviços especiais com tratamento dedicado
+ * Detects if the URL belongs to special services with dedicated handling
  */
 export function detectSpecialPage(url: string): 'youtube' | 'github' | 'twitter' | 'instagram' | null {
   if (!url) return null;
@@ -34,7 +34,7 @@ export function detectSpecialPage(url: string): 'youtube' | 'github' | 'twitter'
 }
 
 /**
- * Executado diretamente na página web (DOM ativo) para extrair o artigo limpo
+ * Runs directly in the active web page DOM to extract clean article content
  */
 export function extractArticleFromDom(): {
   title: string;
@@ -48,7 +48,7 @@ export function extractArticleFromDom(): {
   const url = window.location.href;
   const special = detectSpecialPage(url);
 
-  // 1. Tratamento para YouTube
+  // 1. YouTube handling
   if (special === 'youtube') {
     const videoTitle =
       document.querySelector('h1.ytd-video-primary-info-renderer yt-formatted-string')?.textContent ||
@@ -67,14 +67,14 @@ export function extractArticleFromDom(): {
       title: videoTitle.trim(),
       byline: channelName.trim(),
       excerpt: description.slice(0, 300),
-      htmlContent: `<p><strong>Canal:</strong> ${channelName}</p><blockquote>${description.slice(0, 1000)}</blockquote>`,
+      htmlContent: `<p><strong>Channel:</strong> ${channelName}</p><blockquote>${description.slice(0, 1000)}</blockquote>`,
       textContent: description,
       wordCount: description.split(/\s+/).length,
       readingTimeMinutes: 1,
     };
   }
 
-  // 2. Tratamento para GitHub
+  // 2. GitHub handling
   if (special === 'github') {
     const repoTitle =
       document.querySelector('#repository-container-header')?.textContent?.replace(/\s+/g, ' ').trim() ||
@@ -96,7 +96,7 @@ export function extractArticleFromDom(): {
     };
   }
 
-  // 3. Tratamento para Twitter / X
+  // 3. Twitter / X handling
   if (special === 'twitter') {
     const tweetEl = document.querySelector('article[data-testid="tweet"]');
     const textEl = tweetEl?.querySelector('[data-testid="tweetText"]');
@@ -115,7 +115,7 @@ export function extractArticleFromDom(): {
     };
   }
 
-  // 4. Tratamento para Instagram
+  // 4. Instagram handling
   if (special === 'instagram') {
     const postEl = document.querySelector('article') || document.body;
     const h1Caption = postEl.querySelector('h1')?.textContent?.trim() || '';
@@ -132,7 +132,7 @@ export function extractArticleFromDom(): {
     };
   }
 
-  // 5. Artigo Padrão com Readability
+  // 5. Standard Readability parsing
   try {
     const docClone = document.cloneNode(true) as Document;
     const reader = new Readability(docClone);
@@ -154,10 +154,10 @@ export function extractArticleFromDom(): {
       };
     }
   } catch (e) {
-    console.warn('Readability falhou no DOM, usando extração simples:', e);
+    console.warn('Readability failed in DOM, falling back to simple extraction:', e);
   }
 
-  // Fallback caso não seja possível extrair corpo de artigo
+  // Fallback if unable to parse article body
   const fallbackText = document.querySelector('article')?.textContent || document.body.innerText || '';
   const words = fallbackText.split(/\s+/).slice(0, 500).join(' ');
 
@@ -173,7 +173,7 @@ export function extractArticleFromDom(): {
 }
 
 /**
- * Extrai o artigo da aba ativa e converte o HTML diretamente para blocos estruturados da Notion API
+ * Extracts active tab article and converts HTML directly into structured Notion API blocks
  */
 export async function getActiveTabArticle(): Promise<ArticleParsedContent | null> {
   if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
@@ -196,22 +196,22 @@ export async function getActiveTabArticle(): Promise<ArticleParsedContent | null
         }
       }
     } catch (e) {
-      console.warn('Falha ao extrair artigo via Readability na aba ativa:', e);
+      console.warn('Failed to extract article via Readability on active tab:', e);
     }
   }
 
-  // Fallback mock para desenvolvimento local
+  // Fallback mock for local development
   return {
-    title: 'Segundo Cérebro: A Arte de Capturar Ideias',
+    title: 'Building a Second Brain: The Art of Capturing Ideas',
     byline: 'Tiago Forte',
-    excerpt: 'Descubra como organizar sua vida digital e potencializar sua produtividade usando o Notion.',
+    excerpt: 'Discover how to organize your digital life and boost your productivity using Notion.',
     htmlContent:
-      '<h2>Por que capturar?</h2><p>Vivemos em um mar de informações. Salvar conteúdos ricos no Notion permite que você transforme consumo passivo em ação criativa.</p><blockquote>"Sua mente é para ter ideias, não para segurá-las."</blockquote>',
-    textContent: 'Por que capturar? Vivemos em um mar de informações...',
+      '<h2>Why capture?</h2><p>We live in a sea of information. Saving rich content to Notion allows you to turn passive consumption into creative action.</p><blockquote>"Your mind is for having ideas, not holding them."</blockquote>',
+    textContent: 'Why capture? We live in a sea of information...',
     wordCount: 35,
     readingTimeMinutes: 1,
     blocks: htmlToNotionBlocks(
-      '<h2>Por que capturar?</h2><p>Vivemos em um mar de informações. Salvar conteúdos ricos no Notion permite que você transforme consumo passivo em ação criativa.</p><blockquote>"Sua mente é para ter ideias, não para segurá-las."</blockquote>'
+      '<h2>Why capture?</h2><p>We live in a sea of information. Saving rich content to Notion allows you to turn passive consumption into creative action.</p><blockquote>"Your mind is for having ideas, not holding them."</blockquote>'
     ),
   };
 }

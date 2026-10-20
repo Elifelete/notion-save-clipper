@@ -40,21 +40,21 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
   const [options, setOptions] = useState<NotionPropertyOption[]>(mapping.options || []);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
-  // Estado para Edição de Tag (Nome e Cor)
+  // State for Tag Editing (Name and Color)
   const [editingOption, setEditingOption] = useState<NotionPropertyOption | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('default');
 
   const type = mapping.notionPropertyType;
 
-  // Sincroniza options locais se mapping mudar
+  // Sync local options if mapping changes
   React.useEffect(() => {
     if (mapping.options && mapping.options.length > 0) {
       setOptions(mapping.options);
     }
   }, [mapping.options]);
 
-  // Carrega opções atualizadas diretamente da API do Notion se apiKey e databaseId existirem
+  // Fetches updated options directly from Notion API if apiKey and databaseId exist
   React.useEffect(() => {
     let isMounted = true;
     async function fetchLatestOptions() {
@@ -89,7 +89,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
           }
         }
       } catch (err) {
-        console.warn('Erro ao carregar opções do Notion:', err);
+        console.warn('Error loading options from Notion:', err);
       } finally {
         if (isMounted) setLoadingOptions(false);
       }
@@ -100,7 +100,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     };
   }, [apiKey, databaseId, mapping.notionPropertyId, mapping.notionPropertyName, type]);
 
-  // Filtra opções em tempo real pela busca
+  // Filters options in real-time
   const filteredOptions = useMemo(() => {
     if (!searchQuery.trim()) return options;
     return options.filter((opt) =>
@@ -108,14 +108,14 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     );
   }, [options, searchQuery]);
 
-  // Verifica se o texto digitado já existe exatamente
+  // Checks if typed search matches existing option exactly
   const exactMatchExists = useMemo(() => {
     return options.some(
       (opt) => opt.name.toLowerCase() === searchQuery.trim().toLowerCase()
     );
   }, [options, searchQuery]);
 
-  // Sincroniza com a API do Notion (se apiKey e databaseId existirem)
+  // Syncs with Notion API
   const syncWithNotion = async (updatedOptions: NotionPropertyOption[]) => {
     setOptions(updatedOptions);
     if (onOptionsUpdate) {
@@ -132,12 +132,12 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
           updatedOptions
         );
       } catch (err) {
-        console.warn('Falha ao sincronizar opções na database do Notion:', err);
+        console.warn('Failed to sync options with Notion database:', err);
       }
     }
   };
 
-  // Criar nova tag
+  // Create new tag
   const handleCreateTag = async (tagName: string, tagColor = 'default') => {
     const cleanName = tagName.trim();
     if (!cleanName) return;
@@ -163,7 +163,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     setSearchQuery('');
   };
 
-  // Excluir tag existente
+  // Delete existing option
   const handleDeleteOption = async (e: React.MouseEvent, optToDelete: NotionPropertyOption) => {
     e.stopPropagation();
     const nextOptions = options.filter((o) => o.name !== optToDelete.name);
@@ -177,7 +177,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     }
   };
 
-  // Iniciar edição de uma tag
+  // Start editing an option
   const handleStartEdit = (e: React.MouseEvent, opt: NotionPropertyOption) => {
     e.stopPropagation();
     setEditingOption(opt);
@@ -185,7 +185,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     setEditColor(opt.color || 'default');
   };
 
-  // Salvar edição (renomear / mudar cor)
+  // Save edit
   const handleSaveEdit = async () => {
     if (!editingOption || !editName.trim()) return;
 
@@ -208,7 +208,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     setEditingOption(null);
   };
 
-  // 1. SELECT (Escolha Única com Busca, Criação e Edição)
+  // 1. SELECT (Single choice with search, create and edit)
   if (type === 'select') {
     const selectedOption = options.find((opt) => opt.name === value);
     const colorStyle = selectedOption ? getNotionColor(selectedOption.color) : getNotionColor('default');
@@ -226,7 +226,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
               onClick={() => onChange('')}
               className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer"
             >
-              Limpar
+              Clear
             </button>
           )}
         </label>
@@ -248,14 +248,14 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                 {value}
               </span>
             ) : (
-              <span className="text-gray-400 text-[11px]">Selecionar opção...</span>
+              <span className="text-gray-400 text-[11px]">Select option...</span>
             )}
             <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </button>
 
           {isDropdownOpen && (
             <div className="absolute z-40 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 max-h-56 overflow-y-auto space-y-2">
-              {/* Campo de Busca em Tempo Real */}
+              {/* Search input */}
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
                 <input
@@ -268,13 +268,13 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                       handleCreateTag(searchQuery);
                     }
                   }}
-                  placeholder="Pesquisar ou criar opção..."
+                  placeholder="Search or create option..."
                   className="w-full pl-8 pr-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   autoFocus
                 />
               </div>
 
-              {/* Botão de Criar Opção quando não existe */}
+              {/* Create option button */}
               {searchQuery.trim() && !exactMatchExists && (
                 <button
                   type="button"
@@ -283,21 +283,21 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>
-                    Criar opção <b>"{searchQuery.trim()}"</b>
+                    Create option <b>"{searchQuery.trim()}"</b>
                   </span>
                 </button>
               )}
 
-              {/* Lista Filtrada de Opções */}
+              {/* Filtered options list */}
               <div className="space-y-0.5 max-h-36 overflow-y-auto">
                 {loadingOptions && options.length === 0 ? (
                   <div className="p-3 text-center text-gray-400 text-[11px] flex items-center justify-center gap-1.5">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                    <span>Carregando opções...</span>
+                    <span>Loading options...</span>
                   </div>
                 ) : filteredOptions.length === 0 && !searchQuery.trim() ? (
                   <div className="p-2 text-center text-gray-400 text-[11px]">
-                    Nenhuma opção cadastrada
+                    No options registered
                   </div>
                 ) : (
                   filteredOptions.map((opt) => {
@@ -325,12 +325,12 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                           {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
                         </div>
 
-                        {/* Ações: Editar e Excluir */}
+                        {/* Actions: Edit and Delete */}
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
                             onClick={(e) => handleStartEdit(e, opt)}
-                            title="Editar opção"
+                            title="Edit option"
                             className="p-1 hover:bg-gray-200 text-gray-500 rounded cursor-pointer"
                           >
                             <Pencil className="w-3 h-3" />
@@ -338,7 +338,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleDeleteOption(e, opt)}
-                            title="Excluir opção"
+                            title="Delete option"
                             className="p-1 hover:bg-red-100 text-red-500 rounded cursor-pointer"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -356,7 +356,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     );
   }
 
-  // 2. MULTI-SELECT (Múltiplas Tags com Busca em Tempo Real, Criação, Edição de Cor e Exclusão)
+  // 2. MULTI-SELECT (Multiple Tags with live search, create, color edit, and delete)
   if (type === 'multi_select') {
     const selectedValues: string[] = Array.isArray(value) ? value : value ? [String(value)] : [];
 
@@ -377,12 +377,12 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
           </span>
           {selectedValues.length > 0 && (
             <span className="text-[10px] text-gray-400">
-              {selectedValues.length} selecionada(s)
+              {selectedValues.length} selected
             </span>
           )}
         </label>
 
-        {/* Tags Atualmente Selecionadas */}
+        {/* Selected tags */}
         <div className="p-1.5 border border-gray-300 rounded-md bg-white min-h-[34px] flex flex-wrap gap-1.5 items-center">
           {selectedValues.map((tag) => {
             const opt = options.find((o) => o.name === tag);
@@ -412,18 +412,18 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
             className="text-[11px] text-blue-600 hover:text-blue-700 font-medium px-1.5 py-0.5 rounded hover:bg-blue-50 cursor-pointer flex items-center gap-1"
           >
             <Plus className="w-3 h-3" />
-            <span>Adicionar tag</span>
+            <span>Add tag</span>
           </button>
         </div>
 
-        {/* Dropdown com Busca em Tempo Real e Edição */}
+        {/* Dropdown with live search and editing */}
         {isDropdownOpen && (
           <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 space-y-2.5 mt-1 z-40">
-            {/* Modal Inline de Edição de Tag (se estiver editando) */}
+            {/* Inline tag edit modal */}
             {editingOption ? (
               <div className="p-2 bg-gray-50 border border-gray-200 rounded-md space-y-2">
                 <div className="text-[11px] font-semibold text-gray-800 flex items-center justify-between">
-                  <span>Editar Tag</span>
+                  <span>Edit Tag</span>
                   <button
                     type="button"
                     onClick={() => setEditingOption(null)}
@@ -438,16 +438,17 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Nome da tag"
+                  placeholder="Tag name"
                 />
 
-                {/* Seletor de Cores do Notion */}
+                {/* Notion Color Picker */}
                 <div>
-                  <div className="text-[10px] text-gray-500 mb-1">Cor do Notion:</div>
+                  <div className="text-[10px] text-gray-500 mb-1">Notion Color:</div>
                   <div className="flex flex-wrap gap-1">
                     {Object.keys(NOTION_COLORS).map((colorKey) => {
                       const color = NOTION_COLORS[colorKey]!;
                       const isSelected = editColor === colorKey;
+
                       return (
                         <button
                           key={colorKey}
@@ -475,20 +476,20 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                     onClick={() => setEditingOption(null)}
                     className="px-2 py-0.5 rounded bg-gray-200 text-gray-700 text-[11px] cursor-pointer"
                   >
-                    Cancelar
+                    Cancel
                   </button>
                   <button
                     type="button"
                     onClick={handleSaveEdit}
                     className="px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium cursor-pointer"
                   >
-                    Salvar
+                    Save
                   </button>
                 </div>
               </div>
             ) : (
               <>
-                {/* Campo de Busca em Tempo Real */}
+                {/* Real-time search */}
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
                   <input
@@ -501,13 +502,13 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                         handleCreateTag(searchQuery);
                       }
                     }}
-                    placeholder="Pesquisar ou criar nova tag..."
+                    placeholder="Search or create new tag..."
                     className="w-full pl-8 pr-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                     autoFocus
                   />
                 </div>
 
-                {/* Opção de Criar Nova Tag se não existir exata */}
+                {/* Option to create tag */}
                 {searchQuery.trim() && !exactMatchExists && (
                   <button
                     type="button"
@@ -516,21 +517,21 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>
-                      Criar tag <b>"{searchQuery.trim()}"</b>
+                      Create tag <b>"{searchQuery.trim()}"</b>
                     </span>
                   </button>
                 )}
 
-                {/* Lista de Opções Filtradas */}
+                {/* Filtered options list */}
                 <div className="max-h-36 overflow-y-auto space-y-0.5">
                   {loadingOptions && options.length === 0 ? (
                     <div className="p-3 text-center text-gray-400 text-[11px] flex items-center justify-center gap-1.5">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                      <span>Carregando tags...</span>
+                      <span>Loading tags...</span>
                     </div>
                   ) : filteredOptions.length === 0 && !searchQuery.trim() ? (
                     <div className="p-2 text-center text-gray-400 text-[11px]">
-                      Nenhuma tag cadastrada
+                      No tags registered
                     </div>
                   ) : (
                     filteredOptions.map((opt) => {
@@ -553,12 +554,12 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                             {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
                           </div>
 
-                          {/* Ações de Editar e Excluir Tag */}
+                          {/* Actions: Edit and Delete */}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               type="button"
                               onClick={(e) => handleStartEdit(e, opt)}
-                              title="Editar tag"
+                              title="Edit tag"
                               className="p-1 hover:bg-gray-200 text-gray-500 rounded cursor-pointer"
                             >
                               <Pencil className="w-3 h-3" />
@@ -566,7 +567,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                             <button
                               type="button"
                               onClick={(e) => handleDeleteOption(e, opt)}
-                              title="Excluir tag"
+                              title="Delete tag"
                               className="p-1 hover:bg-red-100 text-red-500 rounded cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -587,7 +588,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
                     }}
                     className="text-[10px] text-gray-500 hover:text-gray-800 font-medium px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer"
                   >
-                    Concluir
+                    Done
                   </button>
                 </div>
               </>
@@ -598,7 +599,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     );
   }
 
-  // 3. STATUS (com Cores Notion)
+  // 3. STATUS (with Notion Colors)
   if (type === 'status') {
     return (
       <div className="space-y-1">
@@ -611,7 +612,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
             onChange={(e) => onChange(e.target.value)}
             className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md bg-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer"
           >
-            <option value="">(Nenhum status selecionado)</option>
+            <option value="">(No status selected)</option>
             {options.map((opt) => (
               <option key={opt.id || opt.name} value={opt.name}>
                 {opt.name}
@@ -623,7 +624,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     );
   }
 
-  // 4. CHECKBOX (Toggle / Switch Interativo)
+  // 4. CHECKBOX (Toggle / Interactive switch)
   if (type === 'checkbox') {
     const isChecked = Boolean(value);
 
@@ -642,7 +643,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     );
   }
 
-  // 5. DATE (Datepicker Nativo)
+  // 5. DATE (Native Datepicker)
   if (type === 'date') {
     return (
       <div className="space-y-1">
@@ -657,7 +658,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
               onClick={() => onChange('')}
               className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer"
             >
-              Limpar
+              Clear
             </button>
           )}
         </label>
@@ -690,7 +691,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
     );
   }
 
-  // 7. RICH TEXT / TEXTO
+  // 7. RICH TEXT / TEXT
   if (type === 'rich_text') {
     return (
       <div className="space-y-1">
@@ -702,7 +703,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
           rows={2}
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={`Preencher ${mapping.notionPropertyName}...`}
+          placeholder={`Enter ${mapping.notionPropertyName}...`}
           className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
         />
       </div>
@@ -719,7 +720,7 @@ export const PropertyField: React.FC<PropertyFieldProps> = ({
         type={type === 'url' ? 'url' : type === 'email' ? 'email' : 'text'}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={`Preencher ${mapping.notionPropertyName}...`}
+        placeholder={`Enter ${mapping.notionPropertyName}...`}
         className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
       />
     </div>

@@ -2,7 +2,7 @@ import type { ExtractedMetadata, SocialPostData } from '../types';
 import { extractTwitterTweet, extractInstagramPost } from './socialMedia';
 
 /**
- * Função injetada na página para coletar metadados do DOM
+ * Script injected into the page to collect DOM metadata
  */
 export function extractPageMetadataScript(): ExtractedMetadata {
   const getMeta = (names: string[]): string => {
@@ -31,7 +31,7 @@ export function extractPageMetadataScript(): ExtractedMetadata {
     getMeta(['og:title', 'twitter:title']) ||
     document.title ||
     document.querySelector('h1')?.textContent?.trim() ||
-    'Sem título';
+    'Untitled';
 
   const description =
     getMeta(['og:description', 'twitter:description', 'description']) || '';
@@ -47,7 +47,7 @@ export function extractPageMetadataScript(): ExtractedMetadata {
 
   const selection = window.getSelection() ? window.getSelection()!.toString().trim() : '';
 
-  // Detecção especial para Twitter/X e Instagram
+  // Special detection for Twitter/X and Instagram
   let socialPost: SocialPostData | undefined;
   const host = window.location.hostname.toLowerCase();
   if (host.includes('twitter.com') || host.includes('x.com')) {
@@ -67,8 +67,8 @@ export function extractPageMetadataScript(): ExtractedMetadata {
   if (socialPost) {
     finalTitle =
       socialPost.platform === 'twitter'
-        ? `Post de @${socialPost.username} no X`
-        : `Post de @${socialPost.username} no Instagram`;
+        ? `@${socialPost.username}'s Post on X`
+        : `@${socialPost.username}'s Post on Instagram`;
     if (socialPost.caption) {
       finalDescription = socialPost.caption;
     }
@@ -90,12 +90,12 @@ export function extractPageMetadataScript(): ExtractedMetadata {
 }
 
 /**
- * Função injetada na página para coletar todas as imagens significativas da página
+ * Script injected into the page to collect all meaningful images
  */
 export function extractPageImagesScript(): string[] {
   const urls = new Set<string>();
 
-  // 1. Meta tags de imagem (OG, Twitter)
+  // 1. Meta image tags (OG, Twitter)
   const metaImages = [
     document.querySelector('meta[property="og:image"]')?.getAttribute('content'),
     document.querySelector('meta[name="twitter:image"]')?.getAttribute('content'),
@@ -106,30 +106,29 @@ export function extractPageImagesScript(): string[] {
     }
   }
 
-  // 2. Tags <img> presentes no documento
+  // 2. <img> tags present in document
   const imgElements = Array.from(document.querySelectorAll('img'));
   for (const img of imgElements) {
     const src = img.currentSrc || img.src || img.getAttribute('data-src');
     if (!src) continue;
 
-    // Filtra URLs inválidas
     if (!src.startsWith('http')) continue;
 
-    // Filtra ícones minúsculos e rastreadores (ex: pixels de 1x1)
+    // Filter tiny icons and trackers
     const width = img.naturalWidth || img.clientWidth || img.width;
     const height = img.naturalHeight || img.clientHeight || img.height;
     if (width > 0 && width < 80) continue;
     if (height > 0 && height < 80) continue;
 
     urls.add(src);
-    if (urls.size >= 30) break; // Limita a 30 imagens para não sobrecarregar
+    if (urls.size >= 30) break;
   }
 
   return Array.from(urls);
 }
 
 /**
- * Executa a extração de imagens na aba ativa do navegador
+ * Extracts images from active browser tab
  */
 export async function getActiveTabImages(): Promise<string[]> {
   if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
@@ -146,11 +145,11 @@ export async function getActiveTabImages(): Promise<string[]> {
         }
       }
     } catch (e) {
-      console.warn('Falha ao extrair imagens via scripting API:', e);
+      console.warn('Failed to extract images via scripting API:', e);
     }
   }
 
-  // Fallbacks de exemplo para teste local
+  // Fallback examples for local testing
   return [
     'https://images.unsplash.com/photo-1517842645767-c639042777db?w=1200',
     'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=1200',
@@ -159,7 +158,7 @@ export async function getActiveTabImages(): Promise<string[]> {
 }
 
 /**
- * Executa a extração na aba ativa do navegador
+ * Extracts metadata from active browser tab
  */
 export async function getActiveTabMetadata(): Promise<ExtractedMetadata> {
   if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
@@ -176,27 +175,26 @@ export async function getActiveTabMetadata(): Promise<ExtractedMetadata> {
         }
       }
 
-      // Fallback com dados da tab se não puder injetar script
       if (tab) {
         return {
-          title: tab.title || 'Sem título',
+          title: tab.title || 'Untitled',
           url: tab.url || 'https://notion.so',
           description: '',
           favicon: tab.favIconUrl,
         };
       }
     } catch (e) {
-      console.warn('Falha ao extrair metadados via scripting API:', e);
+      console.warn('Failed to extract metadata via scripting API:', e);
     }
   }
 
-  // Fallback para desenvolvimento local
+  // Fallback for local development
   return {
-    title: 'Exemplo: Artigo de Teste para o Notion',
-    url: 'https://exemplo.com/como-organizar-seu-segundo-cerebro',
-    description: 'Um guia completo e detalhado sobre como criar fluxos de captura rápidos e inteligentes no Notion.',
+    title: 'Example: Test Article for Notion',
+    url: 'https://example.com/how-to-build-a-second-brain',
+    description: 'A comprehensive guide on creating fast and intelligent capture workflows for Notion.',
     coverImage: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=1200',
     favicon: 'https://notion.so/favicon.ico',
-    author: 'Equipe de Produtividade',
+    author: 'Productivity Team',
   };
 }
