@@ -230,9 +230,32 @@ export default defineContentScript({
       }
     }
 
-    // Modal drag and move handler
+    // Modal drag and move state
+    let activeDragShield: HTMLDivElement | null = null;
+    let dragMoveHandler: ((e: MouseEvent) => void) | null = null;
+    let dragUpHandler: ((e: MouseEvent) => void) | null = null;
+
+    function stopDragging() {
+      if (dragMoveHandler) {
+        window.removeEventListener('mousemove', dragMoveHandler, true);
+        document.removeEventListener('mousemove', dragMoveHandler, true);
+        dragMoveHandler = null;
+      }
+      if (dragUpHandler) {
+        window.removeEventListener('mouseup', dragUpHandler, true);
+        document.removeEventListener('mouseup', dragUpHandler, true);
+        dragUpHandler = null;
+      }
+      if (activeDragShield) {
+        activeDragShield.remove();
+        activeDragShield = null;
+      }
+      window.removeEventListener('blur', stopDragging);
+    }
+
     function startDragging(offsetX: number, offsetY: number) {
       if (!overlayContainer) return;
+      stopDragging(); // Clean up any lingering drag state
 
       const rect = overlayContainer.getBoundingClientRect();
 
@@ -258,8 +281,9 @@ export default defineContentScript({
         user-select: none !important;
       `;
       document.body.appendChild(dragShield);
+      activeDragShield = dragShield;
 
-      const onMouseMove = (e: MouseEvent) => {
+      dragMoveHandler = (e: MouseEvent) => {
         if (!overlayContainer) return;
         let newX = e.clientX - offsetX;
         let newY = e.clientY - offsetY;
@@ -278,18 +302,16 @@ export default defineContentScript({
         overlayContainer.style.top = `${newY}px`;
       };
 
-      const onMouseUp = () => {
-        dragShield.remove();
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-
-        if (iframeElement && iframeElement.contentWindow) {
-          iframeElement.contentWindow.postMessage({ action: 'NOTION_SAVE_END_DRAG' }, '*');
-        }
+      dragUpHandler = (e: MouseEvent) => {
+        stopDragging();
       };
 
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
+      // Listen on dragShield, window, and document to be 100% resilient
+      dragShield.addEventListener('mousemove', dragMoveHandler, true);
+      dragShield.addEventListener('mouseup', dragUpHandler, true);
+      window.addEventListener('mousemove', dragMoveHandler, true);
+      window.addEventListener('mouseup', dragUpHandler, true);
+      window.addEventListener('blur', stopDragging);
     }
 
     // Creates and attaches iframe overlay
@@ -348,6 +370,9 @@ export default defineContentScript({
         if (event.data?.action === 'NOTION_SAVE_START_DRAG') {
           startDragging(event.data.clientX, event.data.clientY);
         }
+        if (event.data?.action === 'NOTION_SAVE_STOP_DRAG') {
+          stopDragging();
+        }
       });
 
       return { container, iframe };
@@ -377,6 +402,7 @@ export default defineContentScript({
     }
 
     function hideOverlay() {
+      stopDragging();
       if (overlayContainer) {
         overlayContainer.style.display = 'none';
       }
