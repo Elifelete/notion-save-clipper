@@ -230,6 +230,68 @@ export default defineContentScript({
       }
     }
 
+    // Modal drag and move handler
+    function startDragging(offsetX: number, offsetY: number) {
+      if (!overlayContainer) return;
+
+      const rect = overlayContainer.getBoundingClientRect();
+
+      // Convert fixed right positioning to explicit left/top coordinates
+      overlayContainer.style.left = `${rect.left}px`;
+      overlayContainer.style.top = `${rect.top}px`;
+      overlayContainer.style.right = 'auto';
+      overlayContainer.style.bottom = 'auto';
+      overlayContainer.style.transition = 'none';
+
+      // Transparent shield across entire viewport to capture all pointer movements smoothly
+      const dragShield = document.createElement('div');
+      dragShield.id = 'notion-save-drag-shield';
+      dragShield.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 2147483647 !important;
+        cursor: grabbing !important;
+        background: transparent !important;
+        user-select: none !important;
+      `;
+      document.body.appendChild(dragShield);
+
+      const onMouseMove = (e: MouseEvent) => {
+        if (!overlayContainer) return;
+        let newX = e.clientX - offsetX;
+        let newY = e.clientY - offsetY;
+
+        // Keep modal visible within viewport bounds
+        const minVisible = 40;
+        const maxX = window.innerWidth - minVisible;
+        const minX = -rect.width + minVisible;
+        const maxY = window.innerHeight - minVisible;
+        const minY = 0;
+
+        newX = Math.max(minX, Math.min(maxX, newX));
+        newY = Math.max(minY, Math.min(maxY, newY));
+
+        overlayContainer.style.left = `${newX}px`;
+        overlayContainer.style.top = `${newY}px`;
+      };
+
+      const onMouseUp = () => {
+        dragShield.remove();
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        if (iframeElement && iframeElement.contentWindow) {
+          iframeElement.contentWindow.postMessage({ action: 'NOTION_SAVE_END_DRAG' }, '*');
+        }
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    }
+
     // Creates and attaches iframe overlay
     function createOverlay(): { container: HTMLDivElement; iframe: HTMLIFrameElement } {
       if (overlayContainer && iframeElement) {
@@ -250,7 +312,7 @@ export default defineContentScript({
         border-radius: 16px !important;
         overflow: hidden !important;
         background: transparent !important;
-        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
         display: none !important;
       `;
 
@@ -282,6 +344,9 @@ export default defineContentScript({
         }
         if (event.data?.action === 'NOTION_SAVE_STOP_ELEMENT_PICKER') {
           stopElementPicker();
+        }
+        if (event.data?.action === 'NOTION_SAVE_START_DRAG') {
+          startDragging(event.data.clientX, event.data.clientY);
         }
       });
 

@@ -34,6 +34,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { NotionDestination, FormConfig, PropertyFieldMapping, PageSaveMode, PropertyDataSource } from '../types';
+import { handleHeaderMouseDown } from '../utils/dragHelper';
 import { fetchDestinations, getDatabaseSchema, searchNotionByQuery } from '../services/notion';
 import { saveForm, deleteForm } from '../services/storage';
 
@@ -577,7 +578,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
     return (
       <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa] flex flex-col h-full min-h-[440px]">
         {/* Header with back arrow */}
-        <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+        <div onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between pb-2 border-b border-gray-200 cursor-grab active:cursor-grabbing select-none">
           <button
             onClick={() => setStep('configure_form')}
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
@@ -807,7 +808,7 @@ export const CreateFormView: React.FC<CreateFormViewProps> = ({
   return (
     <div className="p-3.5 space-y-3 text-xs text-gray-800 bg-[#f8f9fa]">
       {/* Header */}
-      <div className="flex items-center justify-between pb-1">
+      <div onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between pb-1 cursor-grab active:cursor-grabbing select-none">
         <button
           type="button"
           onClick={onCancel}

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { getApiKey, setApiKey, getForms, deleteForm } from '../services/storage';
 import { validateNotionApiKey } from '../services/notion';
+import { handleHeaderMouseDown } from '../utils/dragHelper';
 import type { FormConfig } from '../types';
 
 interface SettingsViewProps {
