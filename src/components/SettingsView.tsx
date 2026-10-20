@@ -100,7 +100,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   return (
     <div className="flex flex-col min-h-[480px] w-full bg-[#f8f9fa] text-xs text-gray-800">
       {/* Top Header with Back and Close */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-white border-b border-gray-100">
+      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between px-3 py-2.5 bg-white border-b border-gray-100 cursor-grab active:cursor-grabbing select-none">
         <div className="flex items-center gap-1.5">
           {onBack && (
             <button

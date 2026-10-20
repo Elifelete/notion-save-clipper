@@ -1,11 +1,13 @@
 import React from 'react';
 
+let isPointerActive = false;
+
 /**
- * Handles mousedown on draggable modal headers.
- * Waits for a 4px movement threshold before starting drag to avoid capturing simple clicks.
+ * Handles pointer/mouse down on draggable modal headers.
+ * Uses delta-based screen movement for buttery-smooth 60fps dragging without freezing or jumping.
  */
-export function handleHeaderMouseDown(e: React.MouseEvent) {
-  // If clicked inside an interactive element, do not initiate drag
+export function handleHeaderMouseDown(e: React.PointerEvent | React.MouseEvent) {
+  // If clicked inside an interactive element (button, link, input, select), do not initiate drag
   const target = e.target as HTMLElement | null;
   if (!target || target.closest('button, input, select, textarea, a, [role="button"]')) {
     return;
@@ -14,44 +16,43 @@ export function handleHeaderMouseDown(e: React.MouseEvent) {
   // Only respond to primary (left) mouse button
   if (e.button !== 0) return;
 
-  const startX = e.screenX;
-  const startY = e.screenY;
-  const clientX = e.clientX;
-  const clientY = e.clientY;
-  let dragStarted = false;
+  if (isPointerActive) return;
+  isPointerActive = true;
 
-  const onMouseMove = (moveEvent: MouseEvent) => {
-    const dx = moveEvent.screenX - startX;
-    const dy = moveEvent.screenY - startY;
+  const currentTarget = e.currentTarget as HTMLElement;
+  const pointerId = (e as any).pointerId;
 
-    if (!dragStarted) {
-      // Require at least 4 pixels of intentional movement before triggering drag
-      if (Math.hypot(dx, dy) >= 4) {
-        dragStarted = true;
-        moveEvent.preventDefault();
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(
-            {
-              action: 'NOTION_SAVE_START_DRAG',
-              clientX,
-              clientY,
-            },
-            '*'
-          );
-        }
+  if (typeof pointerId === 'number' && currentTarget.setPointerCapture) {
+    try {
+      currentTarget.setPointerCapture(pointerId);
+    } catch {}
+  }
+
+  let lastScreenX = e.screenX;
+  let lastScreenY = e.screenY;
+  let isMoving = false;
+
+  const onMove = (moveEvent: PointerEvent | MouseEvent) => {
+    const dx = moveEvent.screenX - lastScreenX;
+    const dy = moveEvent.screenY - lastScreenY;
+
+    lastScreenX = moveEvent.screenX;
+    lastScreenY = moveEvent.screenY;
+
+    if (!isMoving) {
+      if (Math.hypot(dx, dy) >= 1) {
+        isMoving = true;
       }
     }
-  };
 
-  const onMouseUp = () => {
-    window.removeEventListener('mousemove', onMouseMove, true);
-    window.removeEventListener('mouseup', onMouseUp, true);
-
-    if (dragStarted) {
+    if (isMoving && (dx !== 0 || dy !== 0)) {
+      moveEvent.preventDefault();
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(
           {
-            action: 'NOTION_SAVE_STOP_DRAG',
+            action: 'NOTION_SAVE_DRAG_DELTA',
+            dx,
+            dy,
           },
           '*'
         );
@@ -59,6 +60,25 @@ export function handleHeaderMouseDown(e: React.MouseEvent) {
     }
   };
 
-  window.addEventListener('mousemove', onMouseMove, true);
-  window.addEventListener('mouseup', onMouseUp, true);
+  const onEnd = (endEvent: PointerEvent | MouseEvent) => {
+    isPointerActive = false;
+
+    if (typeof pointerId === 'number' && currentTarget.releasePointerCapture) {
+      try {
+        currentTarget.releasePointerCapture(pointerId);
+      } catch {}
+    }
+
+    window.removeEventListener('pointermove', onMove as any, true);
+    window.removeEventListener('mousemove', onMove, true);
+    window.removeEventListener('pointerup', onEnd as any, true);
+    window.removeEventListener('mouseup', onEnd, true);
+    window.removeEventListener('pointercancel', onEnd as any, true);
+  };
+
+  window.addEventListener('pointermove', onMove as any, true);
+  window.addEventListener('mousemove', onMove, true);
+  window.addEventListener('pointerup', onEnd as any, true);
+  window.addEventListener('mouseup', onEnd, true);
+  window.addEventListener('pointercancel', onEnd as any, true);
 }

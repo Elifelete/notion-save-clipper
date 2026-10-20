@@ -230,88 +230,30 @@ export default defineContentScript({
       }
     }
 
-    // Modal drag and move state
-    let activeDragShield: HTMLDivElement | null = null;
-    let dragMoveHandler: ((e: MouseEvent) => void) | null = null;
-    let dragUpHandler: ((e: MouseEvent) => void) | null = null;
-
-    function stopDragging() {
-      if (dragMoveHandler) {
-        window.removeEventListener('mousemove', dragMoveHandler, true);
-        document.removeEventListener('mousemove', dragMoveHandler, true);
-        dragMoveHandler = null;
-      }
-      if (dragUpHandler) {
-        window.removeEventListener('mouseup', dragUpHandler, true);
-        document.removeEventListener('mouseup', dragUpHandler, true);
-        dragUpHandler = null;
-      }
-      if (activeDragShield) {
-        activeDragShield.remove();
-        activeDragShield = null;
-      }
-      window.removeEventListener('blur', stopDragging);
-    }
-
-    function startDragging(offsetX: number, offsetY: number) {
+    // Handles smooth 60fps delta movement sent by iframe
+    function handleDragDelta(dx: number, dy: number) {
       if (!overlayContainer) return;
-      stopDragging(); // Clean up any lingering drag state
-
       const rect = overlayContainer.getBoundingClientRect();
 
-      // Convert fixed right positioning to explicit left/top coordinates
-      overlayContainer.style.left = `${rect.left}px`;
-      overlayContainer.style.top = `${rect.top}px`;
       overlayContainer.style.right = 'auto';
       overlayContainer.style.bottom = 'auto';
       overlayContainer.style.transition = 'none';
 
-      // Transparent shield across entire viewport to capture all pointer movements smoothly
-      const dragShield = document.createElement('div');
-      dragShield.id = 'notion-save-drag-shield';
-      dragShield.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        z-index: 2147483647 !important;
-        cursor: grabbing !important;
-        background: transparent !important;
-        user-select: none !important;
-      `;
-      document.body.appendChild(dragShield);
-      activeDragShield = dragShield;
+      let newX = rect.left + dx;
+      let newY = rect.top + dy;
 
-      dragMoveHandler = (e: MouseEvent) => {
-        if (!overlayContainer) return;
-        let newX = e.clientX - offsetX;
-        let newY = e.clientY - offsetY;
+      // Keep modal visible within viewport bounds
+      const minVisible = 40;
+      const maxX = window.innerWidth - minVisible;
+      const minX = -rect.width + minVisible;
+      const maxY = window.innerHeight - minVisible;
+      const minY = 0;
 
-        // Keep modal visible within viewport bounds
-        const minVisible = 40;
-        const maxX = window.innerWidth - minVisible;
-        const minX = -rect.width + minVisible;
-        const maxY = window.innerHeight - minVisible;
-        const minY = 0;
+      newX = Math.max(minX, Math.min(maxX, newX));
+      newY = Math.max(minY, Math.min(maxY, newY));
 
-        newX = Math.max(minX, Math.min(maxX, newX));
-        newY = Math.max(minY, Math.min(maxY, newY));
-
-        overlayContainer.style.left = `${newX}px`;
-        overlayContainer.style.top = `${newY}px`;
-      };
-
-      dragUpHandler = (e: MouseEvent) => {
-        stopDragging();
-      };
-
-      // Listen on dragShield, window, and document to be 100% resilient
-      dragShield.addEventListener('mousemove', dragMoveHandler, true);
-      dragShield.addEventListener('mouseup', dragUpHandler, true);
-      window.addEventListener('mousemove', dragMoveHandler, true);
-      window.addEventListener('mouseup', dragUpHandler, true);
-      window.addEventListener('blur', stopDragging);
+      overlayContainer.style.left = `${newX}px`;
+      overlayContainer.style.top = `${newY}px`;
     }
 
     // Creates and attaches iframe overlay
@@ -367,11 +309,8 @@ export default defineContentScript({
         if (event.data?.action === 'NOTION_SAVE_STOP_ELEMENT_PICKER') {
           stopElementPicker();
         }
-        if (event.data?.action === 'NOTION_SAVE_START_DRAG') {
-          startDragging(event.data.clientX, event.data.clientY);
-        }
-        if (event.data?.action === 'NOTION_SAVE_STOP_DRAG') {
-          stopDragging();
+        if (event.data?.action === 'NOTION_SAVE_DRAG_DELTA') {
+          handleDragDelta(event.data.dx, event.data.dy);
         }
       });
 
@@ -402,7 +341,6 @@ export default defineContentScript({
     }
 
     function hideOverlay() {
-      stopDragging();
       if (overlayContainer) {
         overlayContainer.style.display = 'none';
       }

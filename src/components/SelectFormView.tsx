@@ -42,7 +42,7 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
   return (
     <div className="flex flex-col min-h-[460px] w-full bg-[#f8f9fa] text-xs text-gray-800">
       {/* Top Header Save.to Style */}
-      <div onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100 cursor-grab active:cursor-grabbing select-none">
+      <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-gray-100 cursor-grab active:cursor-grabbing select-none">
         <span className="font-bold text-sm text-gray-900 tracking-tight">Notion Save</span>
         <div className="flex items-center gap-2 text-gray-500">
           <button
@@ -90,7 +90,7 @@ export const SelectFormView: React.FC<SelectFormViewProps> = ({
 
       <div className="p-3.5 space-y-3.5 flex-1">
         {/* Section Header: Select Form + Settings Icon */}
-        <div onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between px-0.5 cursor-grab active:cursor-grabbing select-none">
+        <div onPointerDown={handleHeaderMouseDown} onMouseDown={handleHeaderMouseDown} title="Drag to move" className="flex items-center justify-between px-0.5 cursor-grab active:cursor-grabbing select-none">
           <h2 className="font-bold text-xs text-gray-700 tracking-wide">Select Form</h2>
           <button
             type="button"
